@@ -78,17 +78,4 @@ void sortVectorsAscending(const std::vector<T> &t, std::vector<SS> &... ss) {
 
 template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
 
-template <typename T> class Vector2D : public std::vector<T> {
-protected:
-  unsigned _width;
-
-public:
-  unsigned width() { return _width; }
-  void setWidth(unsigned i) { width = i; }
-
-  T &operator()(int x, int y) { return this->operator[](x + _width * y); }
-
-  Vector2D(unsigned newWidth) : std::vector<T>(), _width(newWidth) {}
-};
-
 #endif
