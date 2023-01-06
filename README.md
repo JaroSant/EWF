@@ -1,6 +1,6 @@
 #EWF
 
-An efficient simulator for exact Wright-Fisher diffusion and diffusion bridge paths, accounting for a wide class of selective regimes (genic, diploid and arbitrary polynomial selection), and the presence/absence of mutation.
+An efficient simulator for exact Wright-Fisher diffusion and diffusion bridge paths, accounting for a wide class of selective regimes (genic, diploid and arbitrary polynomial selection), and the presence/absence of mutation. Please consult the _UserManual.pdf_ for all details with regards to installing dependencies, setting the correct linker flags, running the program and configuring the program input.
 
 *Dependencies*
 

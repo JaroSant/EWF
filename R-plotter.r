@@ -1,17 +1,14 @@
-rm(list = ls()) 
-library(ggplot2) #Needs ggplot2 - run install.packages(ggplot2) if not already installed !!
-
 cols <- hcl.colors(30, "Spectral")
 
 Ne = 10000 #Quantities needed to recale time back into years before present 
 g = 5
 
-ImpT <- t(read.table("D:/MCMC4WF-ThetaZero/ImpT.txt", quote = "\"", comment.char = "")) #Input location of file ImpT.txt here! 
+ImpT <- t(read.table("D:/ImpT.txt", quote = "\"", comment.char = "")) #Input location of file ImpT.txt here! 
 ImpT <-(((ImpT * 2 * Ne * g) - 20000)) #Converting from diffusion time to years before present
-ImpHT <-(t(read.table("D:/MCMC4WF-ThetaZero/HorseTrajectories.txt", quote = "\"", comment.char = ""))) #Input location of file ImpHT.txt here!
-OGT <-t(read.table("D:/MCMC4WF-ThetaZero/OGT.txt", quote = "\"", comment.char = "")) #Input location of file OGT.txt here! 
+ImpHT <-(t(read.table("D:/HorseTrajectories.txt", quote = "\"", comment.char = ""))) #Input location of file ImpHT.txt here!
+OGT <-t(read.table("D:/OGT.txt", quote = "\"", comment.char = "")) #Input location of file OGT.txt here! 
 OGT <-(((OGT * 2 * Ne * g) - 20000)) #Converting from diffusion time to years before present
-OGHT <-(t(read.table("D:/MCMC4WF-ThetaZero/OGHT.txt", quote = "\"", comment.char = ""))) #Input location of file OGHT.txt here
+OGHT <-(t(read.table("D:/OGHT.txt", quote = "\"", comment.char = ""))) #Input location of file OGHT.txt here
 
 setEPS()
 postscript(file = "horseTrajectories.eps") #Selection of figure format
