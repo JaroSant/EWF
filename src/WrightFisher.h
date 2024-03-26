@@ -18,24 +18,70 @@ using namespace boost::multiprecision;
 typedef double double100;
 
 class WrightFisher {
-public:
+ public:
   WrightFisher(vector<double> thetaP_in, bool non_neut_in, double100 sigma_in,
                int selectionsetup_in, double dom_in, int SelPolyDeg_in,
                vector<double> selCoefs_in)
-      : thetaP(thetaP_in), non_neutral(non_neut_in), sigma(sigma_in),
-        SelectionSetup(selectionsetup_in), dominanceParameter(dom_in),
-        SelPolyDeg(SelPolyDeg_in), selectionCoeffs(selCoefs_in) {
+      : thetaP(thetaP_in),
+        non_neutral(non_neut_in),
+        sigma(sigma_in),
+        SelectionSetup(selectionsetup_in),
+        dominanceParameter(dom_in),
+        SelPolyDeg(SelPolyDeg_in),
+        selectionCoeffs(selCoefs_in) {
     ThetaSetter();
     SelectionSetter();
     PhiSetter();
-  } 
+    std::cout << R"(
+                           
+     +++           )|(     
+    (o o)         (o o)    
+ooO--(_)--Ooo-ooO--(_)--Ooo
+    _______       ________
+   / ____/ |     / / ____/
+  / __/  | | /| / / /_    
+ / /___  | |/ |/ / __/    
+/_____/  |__/|__/_/       
+                          
+)" << '\n';
+    std::cout << "You've instantiated a WrightFisher class with the following "
+                 "parameters:"
+              << std::endl;
+    if (!thetaP.empty()) {
+      std::cout << "Theta vector: (" << thetaP.front() << ", " << thetaP.back()
+                << ")" << std::endl;
+    } else {
+      std::cout << "Theta vector: (0.0, 0.0)" << std::endl;
+    }
+    if (non_neutral) {
+      if (SelectionSetup == 0) {
+        std::cout << "Genic selection: " << sigma << std::endl;
+      } else if (SelectionSetup == 1) {
+        std::cout << "Diploid selection with:" << std::endl;
+        std::cout << "Sigma: " << sigma << std::endl;
+        std::cout << "Dominance parameter: " << dominanceParameter << std::endl;
+      } else {
+        std::cout << "Polynomial selection with degree " << SelPolyDeg
+                  << " with entries:" << std::endl;
+        for (vector<double>::iterator sc_it = selectionCoeffs.begin();
+             sc_it != selectionCoeffs.end(); sc_it++) {
+          std::cout << *sc_it << ", ";
+        }
+        std::cout << "." << std::endl;
+      }
+    } else {
+      std::cout << "No selection." << std::endl;
+    }
+  }
+
+  double100 phiMin, phiMax, AtildeMax;
 
   /// HELPER FUNCTIONS
-
   void ThetaSetter();
   void ThetaResetter();
   void SelectionSetter();
   void PhiSetter();
+  vector<double100> get_Theta();
   double100 Phitilde(double100 y);
   vector<double100> PhitildeMinMaxRange();
   double100 Atilde(double100 x);
@@ -44,6 +90,7 @@ public:
   double100 computeLogBeta(int m, int k);
   double100 NormCDF(double100 x, double100 m, double100 v);
   double100 DiscretisedNormCDF(int m, double100 t);
+  double100 LogBinomialCoefficientCalculator(int n, int k);
   double100 UnconditionedDiffusionDensity(double100 x, double100 y, double100 t,
                                           const Options &o);
   double100 DiffusionDensityApproximationDenom(double100 x, double100 t,
@@ -77,9 +124,8 @@ public:
 
   pair<int, int> DrawAncestralProcess(double100 t, const Options &o,
                                       boost::random::mt19937 &gen);
-  pair<int, int>
-  DrawAncestralProcessConditionalZero(double100 t, const Options &o,
-                                      boost::random::mt19937 &gen);
+  pair<int, int> DrawAncestralProcessConditionalZero(
+      double100 t, const Options &o, boost::random::mt19937 &gen);
   pair<pair<int, int>, int> DrawAncestralProcessConditionalInterior(
       double100 t, double100 x, const Options &o, boost::random::mt19937 &gen);
   int DrawAncestralProcessG1984(double100 t, boost::random::mt19937 &gen);
@@ -128,10 +174,9 @@ public:
   vector<int> DrawBridgePMFDifferentMutation(double100 s, double100 t,
                                              double100 x, const Options &o,
                                              boost::random::mt19937 &gen);
-  vector<int>
-  DrawBridgePMFDifferentMutationOneQApprox(double100 s, double100 t,
-                                           double100 x, const Options &o,
-                                           boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDifferentMutationOneQApprox(
+      double100 s, double100 t, double100 x, const Options &o,
+      boost::random::mt19937 &gen);
   vector<int> DrawBridgePMFDifferentMutationApprox(double100 s, double100 t,
                                                    double100 x,
                                                    const Options &o,
@@ -140,10 +185,9 @@ public:
                                             double100 s, double100 t,
                                             const Options &o,
                                             boost::random::mt19937 &gen);
-  vector<int>
-  DrawBridgePMFInteriorMutationOneQApprox(double100 x, double100 z, double100 s,
-                                          double100 t, const Options &o,
-                                          boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFInteriorMutationOneQApprox(
+      double100 x, double100 z, double100 s, double100 t, const Options &o,
+      boost::random::mt19937 &gen);
   vector<int> DrawBridgePMFInteriorMutationApprox(double100 x, double100 z,
                                                   double100 s, double100 t,
                                                   const Options &o,
@@ -191,37 +235,41 @@ public:
                                                  bool Absorption,
                                                  const Options &o,
                                                  boost::random::mt19937 &gen);
-  pair<double100, int>
-  NonNeutralDrawBridgepoint(double100 x, double100 t1, double100 t2,
-                            double100 z, double100 testT, bool Absorption,
-                            const Options &o, boost::random::mt19937 &gen);
+  pair<double100, int> NonNeutralDrawBridgepoint(
+      double100 x, double100 t1, double100 t2, double100 z, double100 testT,
+      bool Absorption, const Options &o, boost::random::mt19937 &gen);
 
   /// SIMULATION RUNNER FUNCTIONS
 
   void DiffusionRunner(int nSim, double100 x, double100 startT, double100 endT,
-                       bool Absorption, string &Filename, const Options &o,
-                       boost::random::mt19937 &gen);
+                       bool Absorption, string &Filename,
+                       double100 diffusion_threshold,
+                       double100 bridge_threshold);
   void BridgeDiffusionRunner(int nSim, double100 x, double100 z,
                              double100 startT, double100 endT,
                              double100 sampleT, bool Absorption,
-                             string &Filename, const Options &o,
-                             boost::random::mt19937 &gen);
+                             string &Filename, double100 diffusion_threshold,
+                             double100 bridge_threshold);
   void DiffusionDensityCalculator(int meshSize, double100 x, double100 startT,
                                   double100 endT, bool Absorption,
-                                  string &Filename, const Options &o);
+                                  string &Filename,
+                                  double100 diffusion_threshold,
+                                  double100 bridge_threshold);
   void BridgeDiffusionDensityCalculator(int meshSize, double100 x, double100 z,
                                         double100 startT, double100 endT,
                                         double100 sampleT, bool Absorption,
-                                        string &Filename, const Options &o);
+                                        string &Filename,
+                                        double100 diffusion_threshold,
+                                        double100 bridge_threshold);
 
-private:
+ private:
   /// WRIGHT-FISHER PROPERTIES
 
   vector<double> thetaP;
   bool non_neutral;
   double theta, sigma;
   int SelectionSetup;
-  double dominanceParameter, phiMin, phiMax, AtildeMax;
+  double dominanceParameter;
   int SelPolyDeg;
   vector<double> selectionCoeffs;
   Polynomial SelectionFunction, PhiFunction, AtildeFunction;
@@ -230,7 +278,8 @@ private:
 
   /// HELPER FUNCTIONS
 
-  template <typename T> T Getlogakm(int k, int m);
+  template <typename T>
+  T Getlogakm(int k, int m);
   int radiate_from_mode(int index, const double100 t) const;
   void increment_on_mk(vector<int> &mk, const double100 s,
                        const double100 t) const;
@@ -250,10 +299,10 @@ private:
   int computeE(pair<vector<int>, double100> &C);
 };
 
-template <typename T> T WrightFisher::Getlogakm(int k, int m) {
+template <typename T>
+T WrightFisher::Getlogakm(int k, int m) {
   assert(k >= m);
-  if (m > static_cast<int>(akm.size()) - 1)
-    akm.resize(m + 1);
+  if (m > static_cast<int>(akm.size()) - 1) akm.resize(m + 1);
   if ((k - m > static_cast<int>(akm[m].size()) - 1)) {
     int oldsize = static_cast<int>(akm[m].size());
     akm[m].resize(k - m + 1, 0);
@@ -266,11 +315,11 @@ template <typename T> T WrightFisher::Getlogakm(int k, int m) {
         for (int j = 2; j <= i; ++j) {
           a += log(theta + m + j - 2.0);
           if (j <= i - m)
-            a -= log(static_cast<T>(j)); /// We need (n-m)! in the denominator
+            a -= log(static_cast<T>(j));  /// We need (n-m)! in the denominator
           if (j <= m)
-            a -= log(static_cast<T>(j)); /// We need m! in the denominator
+            a -= log(static_cast<T>(j));  /// We need m! in the denominator
         }
-        akm[m][i - m] = a; /// So akm[m] = (a{m,m}, a{m+1,m} a{m+2,m}, ...)
+        akm[m][i - m] = a;  /// So akm[m] = (a{m,m}, a{m+1,m} a{m+2,m}, ...)
       }
     }
   }

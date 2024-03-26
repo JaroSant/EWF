@@ -21,16 +21,20 @@ bool EqualFirstCoord(const pair<T1, T2> &P1, const pair<T1, T2> &P2) {
 }
 
 struct Options {
-  Options()
-      : w(20), g1984threshold(0.08), bridgethreshold(0.008), eps(0.99),
+  Options(double diffusion_threshold, double bridge_threshold)
+      : w(20),
+        g1984threshold(diffusion_threshold),
+        bridgethreshold(bridge_threshold),
+        eps(0.99),
         debug(0){};
-  int w; /// w is the field width for outputting
+  int w;  /// w is the field width for outputting
   double100 g1984threshold, bridgethreshold, eps;
   vector<double> thetaP;
   int debug;
 };
 
-template <typename T> void printVec(const vector<T> &vec, ostream &o = cout) {
+template <typename T>
+void printVec(const vector<T> &vec, ostream &o = cout) {
   for (unsigned int i = 0; i < vec.size(); i++) {
     o << vec[i] << " ";
   }
@@ -58,24 +62,27 @@ void applyPermutation(const std::vector<unsigned> &order, std::vector<T> &t) {
 
 template <typename T, typename... S>
 void applyPermutation(const std::vector<unsigned> &order, std::vector<T> &t,
-                      std::vector<S> &... s) {
+                      std::vector<S> &...s) {
   applyPermutation(order, t);
   applyPermutation(order, s...);
 }
 
 template <typename T, typename Compare, typename... SS>
 void sortVectors(const std::vector<T> &t, Compare comp,
-                 std::vector<SS> &... ss) {
+                 std::vector<SS> &...ss) {
   std::vector<unsigned> order;
   getSortPermutation(order, t, comp);
   applyPermutation(order, ss...);
 }
 
 template <typename T, typename... SS>
-void sortVectorsAscending(const std::vector<T> &t, std::vector<SS> &... ss) {
+void sortVectorsAscending(const std::vector<T> &t, std::vector<SS> &...ss) {
   sortVectors(t, std::less<T>(), ss...);
 }
 
-template <typename T> int sgn(T val) { return (T(0) < val) - (val < T(0)); }
+template <typename T>
+int sgn(T val) {
+  return (T(0) < val) - (val < T(0));
+}
 
 #endif

@@ -1,3 +1,7 @@
+#include "WrightFisher.h"
+
+#include <time.h>
+
 #include <algorithm>
 #include <boost/math/distributions/beta.hpp>
 #include <boost/math/distributions/binomial.hpp>
@@ -12,39 +16,38 @@
 #include <boost/random/uniform_01.hpp>
 #include <fstream>
 #include <map>
-#include <time.h>
 
 #include "Polynomial.h"
-#include "WrightFisher.h"
 
 /// HELPER FUNCTIONS
 
-void WrightFisher::ThetaSetter() /// Set theta depending on what thetaP is
-                                 /// entered
+void WrightFisher::ThetaSetter()  /// Set theta depending on what thetaP is
+                                  /// entered
 {
-  if (!thetaP.empty()) /// When thetaP is not empty, set theta to be the L1 norm
-                       /// of thetaP
+  if (!thetaP.empty())  /// When thetaP is not empty, set theta to be the L1
+                        /// norm of thetaP
   {
     theta = accumulate(thetaP.begin(), thetaP.end(), 0.0);
   } else {
-    theta = 0.0; /// Otherwise thetaP is empty and we set theta to be 0.0
+    theta = 0.0;  /// Otherwise thetaP is empty and we set theta to be 0.0
   }
 }
 
-void WrightFisher::
-    ThetaResetter() /// For conditioned bridge ONLY - set thetaP empty to (2,2),
-                    /// or thetaP = (0,theta)/(theta,0) to (2,theta)/(theta,2)
+void WrightFisher::ThetaResetter()  /// For conditioned bridge ONLY - set thetaP
+                                    /// empty to (2,2), or thetaP =
+                                    /// (0,theta)/(theta,0) to
+                                    /// (2,theta)/(theta,2)
 {
-  if (thetaP.empty()) /// If no mutation present, we need to set both thetaP
-                      /// entries to 2
+  if (thetaP.empty())  /// If no mutation present, we need to set both thetaP
+                       /// entries to 2
   {
     thetaP.push_back(2.0);
     thetaP.push_back(2.0);
 
     theta = 4.0;
   } else if (!(thetaP[0] > 0.0) ||
-             !(thetaP[1] > 0.0)) /// If one sided mutation, we need to set
-                                 /// corresponding parameter to 2
+             !(thetaP[1] > 0.0))  /// If one sided mutation, we need to set
+                                  /// corresponding parameter to 2
   {
     if (!(thetaP[0] > 0.0)) {
       thetaP[0] = 2.0;
@@ -57,28 +60,28 @@ void WrightFisher::
   }
 }
 
-void WrightFisher::SelectionSetter() /// Setting up selection mechanisms
+void WrightFisher::SelectionSetter()  /// Setting up selection mechanisms
 {
-  if (non_neutral) /// If false, we don't need to run anything
+  if (non_neutral)  /// If false, we don't need to run anything
   {
     Polynomial GenicSelection(-1.0, 1.0,
-                              0.0); /// Set up genic selection (which will
-                                    /// always be present) as Polynomial class
+                              0.0);  /// Set up genic selection (which will
+    /// always be present) as Polynomial class
     double100 AlphaC1 = (thetaP.empty() ? 0.0 : 0.5 * thetaP[0]),
               AlphaC2 = (thetaP.empty() ? 0.0 : -0.5 * theta);
     Polynomial Alpha(AlphaC2, AlphaC1);
 
-    if (SelectionSetup == 0) /// Genic Selection - sigma*x*(1-x)
+    if (SelectionSetup == 0)  /// Genic Selection - sigma*x*(1-x)
     {
       SelPolyDeg = 2;
       SelectionFunction.Copy(0.5 * sigma * GenicSelection);
       Polynomial temp_Phi = 0.5 * (2.0 * 0.5 * sigma * Alpha +
                                    pow(0.5 * sigma, 2.0) * GenicSelection);
-      Polynomial temp_A(0.5 * sigma, 0.0); //= sigma*;
+      Polynomial temp_A(0.5 * sigma, 0.0);  //= sigma*;
       PhiFunction.Copy(temp_Phi);
       AtildeFunction.Copy(temp_A);
     } else if (SelectionSetup ==
-               1) /// Diploid Selection - sigma*x*(1-x)*(h+x*(1-2*h))
+               1)  /// Diploid Selection - sigma*x*(1-x)*(h+x*(1-2*h))
     {
       SelPolyDeg = 4;
       Polynomial Eta(1.0 - 2.0 * dominanceParameter, dominanceParameter);
@@ -92,7 +95,7 @@ void WrightFisher::SelectionSetter() /// Setting up selection mechanisms
       PhiFunction.Copy(temp_Phi);
       AtildeFunction.Copy(temp_A);
     } else if (SelectionSetup ==
-               2) /// General polynomial selection - sigma*x*(1-x)*eta(x)
+               2)  /// General polynomial selection - sigma*x*(1-x)*eta(x)
     {
       SelPolyDeg = 2 * selectionCoeffs.size();
       double *coeff_ptr = &selectionCoeffs[0];
@@ -101,13 +104,13 @@ void WrightFisher::SelectionSetter() /// Setting up selection mechanisms
           0.5 * (2.0 * 0.5 * sigma * Alpha * Eta +
                  pow(0.5 * sigma, 2.0) * GenicSelection * Eta * Eta +
                  0.5 * sigma * GenicSelection * Eta.Derivative());
-      cout << temp_Phi.EvaluateReal(0.5) << endl;
+      std::cout << temp_Phi.EvaluateReal(0.5) << endl;
       vector<double> ACoeffs(SelPolyDeg + 1);
       for (int i = 0; i <= SelPolyDeg; i++) {
         ACoeffs[i] =
             (0.5 * sigma * selectionCoeffs[i]) /
             (static_cast<double>(
-                i + 1)); /// Scaling polynomials coefficients appropriately
+                i + 1));  /// Scaling polynomials coefficients appropriately
       }
       coeff_ptr = &ACoeffs[0];
       Polynomial temp_A(coeff_ptr, SelPolyDeg);
@@ -115,26 +118,27 @@ void WrightFisher::SelectionSetter() /// Setting up selection mechanisms
       PhiFunction.Copy(temp_Phi);
       AtildeFunction.Copy(temp_A);
     } else {
-      cout << "Please enter a valid selection setup!"
-           << endl; /// If values not within {0,1,2} complain!
+      std::cout << "Please enter a valid selection setup!"
+                << endl;  /// If values not within {0,1,2} complain!
     }
   }
 
-  PhiSetter(); /// Run function to set phi values
+  PhiSetter();  /// Run function to set phi values
 }
 
-void WrightFisher::PhiSetter() /// Compute max and min of Phi & Atilde functions
+void WrightFisher::PhiSetter()  /// Compute max and min of Phi & Atilde
+                                /// functions
 {
-  if (non_neutral) /// If false, we don't need to bother
+  if (non_neutral)  /// If false, we don't need to bother
   {
-    if (SelectionSetup == 0) /// Genic selection case
+    if (SelectionSetup == 0)  /// Genic selection case
     {
       vector<double> GenicSelMinMax = PhitildeMinMaxRange();
       phiMin = GenicSelMinMax[0];
       phiMax = GenicSelMinMax[1];
       AtildeMax = 0.5 * sigma;
-    } else /// Otherwise we set Phi & Atilde fns, then use the
-           /// PolynomialRootFinder to compute their extrema
+    } else  /// Otherwise we set Phi & Atilde fns, then use the
+            /// PolynomialRootFinder to compute their extrema
     {
       Polynomial temp1 = PhiFunction.Derivative(),
                  temp2 = AtildeFunction.Derivative();
@@ -201,11 +205,13 @@ void WrightFisher::PhiSetter() /// Compute max and min of Phi & Atilde functions
   }
 }
 
+vector<double100> WrightFisher::get_Theta() { return thetaP; }
+
 double100 WrightFisher::Phitilde(
-    double100 y) /// Returns value of the quadratic function phitilde(y)
+    double100 y)  /// Returns value of the quadratic function phitilde(y)
 {
   assert((y >= 0.0) && (y <= 1.0));
-  if (SelectionSetup == 0) /// For genic selection
+  if (SelectionSetup == 0)  /// For genic selection
   {
     if (sigma == 0.0) {
       return 0.0;
@@ -214,30 +220,30 @@ double100 WrightFisher::Phitilde(
               (-(0.5) * sigma * y * y + ((0.5 * sigma) - theta) * y +
                (thetaP.empty() ? 0.0 : thetaP[0])));
     }
-  } else /// Otherwise use Polynomial class to evaluate
+  } else  /// Otherwise use Polynomial class to evaluate
   {
     return PhiFunction.EvaluateReal(y);
   }
 }
 
 vector<double100>
-WrightFisher::PhitildeMinMaxRange() /// Returns the minimum, maximum and range
-                                    /// of phitilde respectively for genic
-                                    /// selection case
+WrightFisher::PhitildeMinMaxRange()  /// Returns the minimum, maximum and range
+                                     /// of phitilde respectively for genic
+                                     /// selection case
 {
   double100 phiargmin,
       phiargmax = max(min(0.5 - (theta / sigma), 1.0),
-                      0.0); /// Find out max value of phitilde by plugging in
-                            /// derivative(phitilde)=0
+                      0.0);  /// Find out max value of phitilde by plugging in
+  /// derivative(phitilde)=0
 
-  if (!(phiargmax > 0.0)) /// Figure out if max is at either boundary and set
-                          /// min to be other
+  if (!(phiargmax > 0.0))  /// Figure out if max is at either boundary and set
+                           /// min to be other
   {
     phiargmin = 1.0;
   } else if (!(phiargmax < 1.0)) {
     phiargmin = 0.0;
-  } else /// Otherwise we need to choose the smaller value at each endpoints as
-         /// the min
+  } else  /// Otherwise we need to choose the smaller value at each endpoints as
+          /// the min
   {
     double100 phizero = Phitilde(0.0), phione = Phitilde(1.0);
 
@@ -257,25 +263,25 @@ WrightFisher::PhitildeMinMaxRange() /// Returns the minimum, maximum and range
   return MinMaxRange;
 }
 
-double100 WrightFisher::Atilde(double100 x) /// Returns the value of Atilde(x)
+double100 WrightFisher::Atilde(double100 x)  /// Returns the value of Atilde(x)
 {
   assert((x >= 0.0) && (x <= 1.0));
-  if (SelectionSetup == 0) /// Genic selection case
+  if (SelectionSetup == 0)  /// Genic selection case
   {
     return 0.5 * (sigma * x);
-  } else /// Otherwise use Polynomial class
+  } else  /// Otherwise use Polynomial class
   {
     return AtildeFunction.EvaluateReal(x);
   }
 }
 
-double100 WrightFisher::Atildeplus() /// Returns the max of Atilde
+double100 WrightFisher::Atildeplus()  /// Returns the max of Atilde
 {
   return AtildeMax;
 }
 
 pair<double, double> WrightFisher::GriffithsParas(
-    double100 t) /// Compute parameters for Griffiths approximation
+    double100 t)  /// Compute parameters for Griffiths approximation
 {
   assert(t > 0.0);
   double beta = (theta - 1.0) * static_cast<double>(t) / 2.0;
@@ -291,8 +297,8 @@ pair<double, double> WrightFisher::GriffithsParas(
 }
 
 int WrightFisher::radiate_from_mode(int index, const double100 t)
-    const /// Moving from mode as opposed to starting from m = 0 and working
-          /// upwards
+    const  /// Moving from mode as opposed to starting from m = 0 and working
+           /// upwards
 {
   double beta = (theta - 1.0) * static_cast<double>(t) / 2.0;
   double eta = (abs(beta) <= 2.5e-5 ? 1.0 : beta / (exp(beta) - 1.0));
@@ -307,7 +313,7 @@ int WrightFisher::radiate_from_mode(int index, const double100 t)
 
 void WrightFisher::increment_on_mk(vector<int> &mk, const double100 s,
                                    const double100 t)
-    const /// Incrementing (m,k) in bridge sampler using bijective fn
+    const  /// Incrementing (m,k) in bridge sampler using bijective fn
 {
   int &m_index = mk[2], &k_index = mk[3];
   --m_index;
@@ -322,10 +328,9 @@ void WrightFisher::increment_on_mk(vector<int> &mk, const double100 s,
 
 double100 WrightFisher::Getd(
     vector<double100> &d, int i, double100 x, double100 z,
-    double100 t) /// Compute contributions to denom for DrawBridgePMF cases
+    double100 t)  /// Compute contributions to denom for DrawBridgePMF cases
 {
-  if (i > static_cast<int>(d.size()) - 1)
-    d.resize(i + 1, -1.0);
+  if (i > static_cast<int>(d.size()) - 1) d.resize(i + 1, -1.0);
   if (d[i] < 0.0) {
     d[i] = 0.0;
     int m = i / 2, offset = i % 2;
@@ -355,13 +360,12 @@ double100 WrightFisher::Getd(
   return d[i];
 }
 
-double100
-WrightFisher::Getd2(vector<double100> &d, int i, double100 x,
-                    double100 t) /// Compute contributions to denom for
-                                 /// AncestralProcessConditional function
+double100 WrightFisher::Getd2(
+    vector<double100> &d, int i, double100 x,
+    double100 t)  /// Compute contributions to denom for
+                  /// AncestralProcessConditional function
 {
-  if (i > static_cast<int>(d.size()) - 1)
-    d.resize(i + 1, -1.0);
+  if (i > static_cast<int>(d.size()) - 1) d.resize(i + 1, -1.0);
   if (d[i] < 0.0) {
     d[i] = 0.0;
     int m = i / 2, offset = i % 2;
@@ -374,8 +378,8 @@ WrightFisher::Getd2(vector<double100> &d, int i, double100 x,
                            pow(x, static_cast<double100>(c2)))
                         : (1.0 - pow(1.0 - x, static_cast<double100>(c2)));
       boost::math::binomial_distribution<double100> B(
-          c2, x); // Could make these distributions static for the duration of
-                  // this x and z
+          c2, x);  // Could make these distributions static for the duration of
+      // this x and z
       d[i] += exp(Getlogakm<double100>(c1, c2) +
                   static_cast<double100>(-c1 * (c1 + theta - 1) * t / 2.0)) *
               binomialremainder;
@@ -386,13 +390,12 @@ WrightFisher::Getd2(vector<double100> &d, int i, double100 x,
   return d[i];
 }
 
-double100
-WrightFisher::GetdBridgeSame(vector<double100> &d, int i, double100 x,
-                             double100 t) /// Compute contributions to denom for
-                                          /// DrawBridgePMFSame function
+double100 WrightFisher::GetdBridgeSame(
+    vector<double100> &d, int i, double100 x,
+    double100
+        t)  /// Compute contributions to denom for DrawBridgePMFSame function
 {
-  if (i > static_cast<int>(d.size()) - 1)
-    d.resize(i + 1, -1.0);
+  if (i > static_cast<int>(d.size()) - 1) d.resize(i + 1, -1.0);
   if (d[i] < 0.0) {
     d[i] = 0.0;
     int m = i / 2, offset = i % 2;
@@ -425,11 +428,10 @@ WrightFisher::GetdBridgeSame(vector<double100> &d, int i, double100 x,
 
 double100 WrightFisher::GetdBridgeInterior(
     vector<double100> &d, int i, double100 x, double100 z,
-    double100
-        t) /// Compute contributions to denom for DrawBridgePMFInterior function
+    double100 t)  /// Compute contributions to denom for DrawBridgePMFInterior
+                  /// function
 {
-  if (i > static_cast<int>(d.size()) - 1)
-    d.resize(i + 1, -1.0);
+  if (i > static_cast<int>(d.size()) - 1) d.resize(i + 1, -1.0);
   if (d[i] < 0.0) {
     d[i] = 0.0;
     int m = i / 2, offset = i % 2;
@@ -460,12 +462,11 @@ double100 WrightFisher::GetdBridgeInterior(
 
 double100 WrightFisher::GetdBridgeUnconditional(
     vector<double100> &d, int i, double100 x, double100 z,
-    double100 t) /// Compute contributions to denom for
-                 /// DrawBridgePMFUnconditioned function
+    double100 t)  /// Compute contributions to denom for
+                  /// DrawBridgePMFUnconditioned function
 {
   int thetaDep = (thetaP.empty() ? 1 : 0);
-  if (i > static_cast<int>(d.size()) - 1)
-    d.resize(i + 1, -1.0);
+  if (i > static_cast<int>(d.size()) - 1) d.resize(i + 1, -1.0);
   if (d[i] < 0.0) {
     d[i] = 0.0;
     int m = i / 2, offset = i % 2;
@@ -487,7 +488,7 @@ double100 WrightFisher::GetdBridgeUnconditional(
 
 double100 WrightFisher::computeA(
     int m, int k, int l, int j, double100 x,
-    double100 z) /// Compute weights for bridge diffusion decomposition
+    double100 z)  /// Compute weights for bridge diffusion decomposition
 {
   assert((m >= 0) && (k >= 0) && (l >= 0) && (j >= 0) && (m >= l) && (k >= j) &&
          (x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0));
@@ -498,27 +499,30 @@ double100 WrightFisher::computeA(
   double100 betaBinPdfs;
 
   if (!(x > 0.0) || !(x < 1.0)) {
-    betaBinPdfs = 1.0; /// If x = 0.0 or 1.0, then there is no contribution
+    betaBinPdfs = 1.0;  /// If x = 0.0 or 1.0, then there is no contribution
   } else {
     betaBinPdfs = pdf(BIN, l);
   }
 
-  if (!(z > 0.0) || !(z < 1.0)) /// Same as above but for z
+  if (!(z > 0.0) || !(z < 1.0))  /// Same as above but for z
   {
-
   } else {
     betaBinPdfs *= pdf(BETA, z);
   }
 
-  return betaBinPdfs * boost::math::binomial_coefficient<double100>(k, j) *
-         (boost::math::beta<double100>(theta1 + l + j, theta2 + m - l + k - j) /
-          boost::math::beta<double100>(theta1 + l, theta2 + m - l));
+  double100 log_bin = LogBinomialCoefficientCalculator(k, j);
+  double100 log_beta_1 =
+      log(boost::math::beta<double100>(theta1 + l + j, theta2 + m - l + k - j));
+  double100 log_beta_2 =
+      log(boost::math::beta<double100>(theta1 + l, theta2 + m - l));
+
+  return betaBinPdfs * exp(log_bin + log_beta_1 - log_beta_2);
 }
 
 double100 WrightFisher::computeAUnconditional(
     int m, int k, int l, double100 x,
     double100
-        z) /// Compute weights for unconditioned bridge diffusion decomposition
+        z)  /// Compute weights for unconditioned bridge diffusion decomposition
 {
   assert((m >= 0) && (k >= 0) && (l >= 0) && (m >= l) && (x > 0.0) &&
          (x < 1.0) && (!(z > 0.0) || !(z < 1.0)));
@@ -549,7 +553,7 @@ double100 WrightFisher::computeAUnconditional(
 }
 
 int WrightFisher::computeC(
-    int m, pair<vector<int>, double100> &C) /// Compute the quantity C_m
+    int m, pair<vector<int>, double100> &C)  /// Compute the quantity C_m
 {
   assert(m >= 0);
   if (m > static_cast<int>(C.first.size() - 1) || C.first[m] < 0) {
@@ -573,7 +577,7 @@ int WrightFisher::computeC(
 }
 
 int WrightFisher::computeE(
-    pair<vector<int>, double100> &C) /// Compute the quantity E
+    pair<vector<int>, double100> &C)  /// Compute the quantity E
 {
   int next_constraint = computeC(0, C), curr_row = 0;
   int diag_index = next_constraint + (next_constraint % 2);
@@ -585,15 +589,14 @@ int WrightFisher::computeE(
       diag_index = next_constraint + curr_row;
       diag_index += (diag_index % 2);
     }
-    if (curr_row == diag_index / 2)
-      Efound = true;
+    if (curr_row == diag_index / 2) Efound = true;
   }
   return curr_row;
 }
 
-double100
-WrightFisher::NormCDF(double100 x, double100 m,
-                      double100 v) /// CDF for N(m,v) - v is the variance
+double100 WrightFisher::NormCDF(
+    double100 x, double100 m,
+    double100 v)  /// CDF for N(m,v) - v is the variance
 {
   return 0.5 * erfc(-(x - m) / sqrt(2 * v));
 }
@@ -601,11 +604,12 @@ WrightFisher::NormCDF(double100 x, double100 m,
 double100 WrightFisher::DiscretisedNormCDF(
     int m,
     double100
-        t) /// CDF for discretised normal, binning mass into nearest integer
+        t)  /// CDF for discretised normal, binning mass into nearest integer
 {
   double100 returnval;
-  int threshold =
-      (thetaP.empty() ? 2 : (thetaP[0] == 0 || !(thetaP[1] > 0.0)) ? 1 : 0);
+  int threshold = (thetaP.empty()                           ? 2
+                   : (thetaP[0] == 0 || !(thetaP[1] > 0.0)) ? 1
+                                                            : 0);
   double beta = (theta - 1.0) * static_cast<double>(t) / 2.0;
   double eta = (abs(beta) <= 2.5e-5 ? 1.0 : beta / (exp(beta) - 1.0));
   double v =
@@ -628,15 +632,33 @@ double100 WrightFisher::DiscretisedNormCDF(
   return returnval;
 }
 
+double100 WrightFisher::LogBinomialCoefficientCalculator(
+    int n, int k)  /// Calculate usual binomial, with approximations kicking in
+                   /// for large n and k
+{
+  assert(n >= 0 && k >= 0 && k <= n);
+  if (n <= 1000) {
+    return log(boost::math::binomial_coefficient<double100>(n, k));
+  } else {  // Compute log approximation using Stirling's formula
+    return static_cast<double100>(n) * log(static_cast<double100>(n)) -
+           static_cast<double100>(k) * log(static_cast<double100>(k)) -
+           static_cast<double100>(n - k) * log(static_cast<double100>(n - k)) +
+           0.5 * (log(static_cast<double100>(n)) -
+                  log(static_cast<double100>(k)) -
+                  log(static_cast<double100>(n - k)) -
+                  log(2 * boost::math::constants::pi<double100>()));
+  }
+}
+
 double100 WrightFisher::UnconditionedDiffusionDensity(
     double100 x, double100 y, double100 t,
-    const Options &o) /// Compute truncation to diffusion transition density
-                      /// where diffusion can be absorbed at any time
+    const Options &o)  /// Compute truncation to diffusion transition density
+                       /// where diffusion can be absorbed at any time
 {
   assert((x > 0.0) && (x < 1.0) && (y >= 0.0) && (y <= 1.0) && (t > 0.0));
 
   int thetaDependent =
-      (thetaP.empty() ? 1 : 0); /// Check what thetaP configuration we have
+      (thetaP.empty() ? 1 : 0);  /// Check what thetaP configuration we have
   double100 density = 0.0, density_inc, threshold = 1.0e-12;
   int mMode = static_cast<int>(floor(GriffithsParas(t).first)), m = mMode,
       mFlip = 1, mU = 0, mD = 0;
@@ -677,7 +699,7 @@ double100 WrightFisher::UnconditionedDiffusionDensity(
 
     density += density_inc;
 
-    if (!(mDownSwitch)) /// Switching mechanism
+    if (!(mDownSwitch))  /// Switching mechanism
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch =
@@ -712,8 +734,8 @@ double100 WrightFisher::UnconditionedDiffusionDensity(
 double100 WrightFisher::DiffusionDensityApproximationDenom(
     double100 x, double100 t,
     const Options
-        &o) /// Compute denominator for truncation to diffusion transition
-            /// density when diffusion conditioned on non-absorption
+        &o)  /// Compute denominator for truncation to diffusion transition
+             /// density when diffusion conditioned on non-absorption
 {
   assert((x >= 0.0) && (x <= 1.0) && (t > 0.0));
   int thetaDependent =
@@ -722,7 +744,7 @@ double100 WrightFisher::DiffusionDensityApproximationDenom(
   double100 denom;
 
   if ((thetaDependent == 1) ||
-      (thetaDependent == 2)) /// Check whether we have a zero mutation entry
+      (thetaDependent == 2))  /// Check whether we have a zero mutation entry
   {
     double100 denom_inc = 1.0;
     denom = 0.0;
@@ -730,7 +752,7 @@ double100 WrightFisher::DiffusionDensityApproximationDenom(
         Dflip = 1, Djm = 0, Djp = 0;
 
     while (denom_inc >
-           0.0) /// As long as increments are positive, keep computing
+           0.0)  /// As long as increments are positive, keep computing
     {
       if (!(x > 0.0) || !(x < 1.0)) {
         denom_inc = QmApprox(d, t, o) * static_cast<double100>(d);
@@ -743,8 +765,8 @@ double100 WrightFisher::DiffusionDensityApproximationDenom(
       denom += denom_inc;
 
       if (Dflip == -1 &&
-          (dMode - Djm - 1 >=
-           thetaDependent)) /// Mechanism to explore either side around the mode
+          (dMode - Djm - 1 >= thetaDependent))  /// Mechanism to explore either
+                                                /// side around the mode
       {
         Djm++;
         d = dMode - Djm;
@@ -764,14 +786,14 @@ double100 WrightFisher::DiffusionDensityApproximationDenom(
 
 double100 WrightFisher::DiffusionDensityApproximation(
     double100 x, double100 y, double100 t,
-    const Options &o) /// Compute truncation to diffusion transition density
+    const Options &o)  /// Compute truncation to diffusion transition density
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (t > 0.0));
   int thetaDependent =
       (thetaP.empty() ? 2
                       : ((thetaP[0] > 0.0 && thetaP[1] > 0.0)
                              ? 0
-                             : 1)); /// Check what thetaP configuration we have
+                             : 1));  /// Check what thetaP configuration we have
   double100 density = 0.0, density_inc,
             denom = DiffusionDensityApproximationDenom(x, t, o),
             threshold = max(1.0e-12 * denom, 1.0e-50);
@@ -793,11 +815,17 @@ double100 WrightFisher::DiffusionDensityApproximation(
           boost::math::binomial_distribution<> BIN(m, x);
           boost::math::beta_distribution<double100> BETA(
               static_cast<double100>(l), static_cast<double100>(m - l));
-          addon += pdf(BIN, l) * pdf(BETA, y);
+          if (l < 1 && y == 0.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y + 1.0e-12);
+          } else if (m - l < 1 && y == 1.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y - 1.0e-12);
+          } else {
+            addon += pdf(BIN, l) * pdf(BETA, y);
+          }
         }
         density_inc = QmApprox(m, t, o) * addon;
       }
-    } else if (!(thetaP[0] > 0.0)) //|| !( thetaP[1] > 0.0 ) )
+    } else if (!(thetaP[0] > 0.0))  //|| !( thetaP[1] > 0.0 ) )
     {
       /*bool thetaSwitch = false;
       if ( !( thetaP[1] > 0.0 ) )
@@ -816,7 +844,13 @@ double100 WrightFisher::DiffusionDensityApproximation(
           boost::math::binomial_distribution<> BIN(m, x);
           boost::math::beta_distribution<double100> BETA(
               static_cast<double100>(l), static_cast<double100>(theta + m - l));
-          addon += pdf(BIN, l) * pdf(BETA, y);
+          if (l < 1 && y == 0.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y + 1.0e-12);
+          } else if (theta + m - l < 1.0 && y == 1.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y - 1.0e-12);
+          } else {
+            addon += pdf(BIN, l) * pdf(BETA, y);
+          }
         }
         density_inc = QmApprox(m, t, o) * addon;
       }
@@ -836,7 +870,13 @@ double100 WrightFisher::DiffusionDensityApproximation(
           boost::math::binomial_distribution<> BIN(m, x);
           boost::math::beta_distribution<double100> BETA(
               static_cast<double100>(theta + l), static_cast<double100>(m - l));
-          addon += pdf(BIN, l) * pdf(BETA, y);
+          if (theta + l < 1.0 && y == 0.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y + 1.0e-12);
+          } else if (m - l < 1 && y == 1.0) {
+            addon += pdf(BIN, l) * pdf(BETA, y - 1.0e-12);
+          } else {
+            addon += pdf(BIN, l) * pdf(BETA, y);
+          }
         }
         density_inc = QmApprox(m, t, o) * addon;
       }
@@ -847,14 +887,20 @@ double100 WrightFisher::DiffusionDensityApproximation(
         boost::math::beta_distribution<double100> BETA(
             static_cast<double100>(thetaP[0] + l),
             static_cast<double100>(thetaP[1] + m - l));
-        addon += pdf(BIN, l) * pdf(BETA, y);
+        if (thetaP[0] + l < 1.0 && y == 0.0) {
+          addon += pdf(BIN, l) * pdf(BETA, y + 1.0e-12);
+        } else if (thetaP[1] + m - l < 1.0 && y == 1.0) {
+          addon += pdf(BIN, l) * pdf(BETA, y - 1.0e-12);
+        } else {
+          addon += pdf(BIN, l) * pdf(BETA, y);
+        }
       }
       density_inc = QmApprox(m, t, o) * addon;
     }
 
     density += density_inc / denom;
 
-    if (!(mDownSwitch)) /// Switching mechanism
+    if (!(mDownSwitch))  /// Switching mechanism
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch =
@@ -886,21 +932,21 @@ double100 WrightFisher::DiffusionDensityApproximation(
   return density;
 }
 
-double100
-WrightFisher::QmApprox(int m, double100 t,
-                       const Options &o) /// Compute an approximation to q_m(t)
+double100 WrightFisher::QmApprox(
+    int m, double100 t,
+    const Options &o)  /// Compute an approximation to q_m(t)
 {
   assert((m >= 0) && (t > 0.0));
   double100 qm = 0.0, qmold = -1.0;
 
-  if (t <= o.g1984threshold) /// If time increment is too small, use discretised
-                             /// Gaussian
+  if (t <= o.g1984threshold)  /// If time increment is too small, use
+                              /// discretised Gaussian
   {
     qm = DiscretisedNormCDF(m, t);
   } else {
     int mkIndex = m;
     while (abs(qm - qmold) > 1.0e-12 || qm < 0.0 ||
-           qm > 1.0) /// If increments are big enough, keep going
+           qm > 1.0)  /// If increments are big enough, keep going
     {
       qmold = qm;
       qm += pow(-1.0, mkIndex - m) *
@@ -910,8 +956,8 @@ WrightFisher::QmApprox(int m, double100 t,
       mkIndex++;
 
       if (!(qm > qmold) && !(qm < qmold) &&
-          (qm < 0.0 || qm > 1.0)) /// We have lost precision, so use discretised
-                                  /// normal approximation
+          (qm < 0.0 || qm > 1.0))  /// We have lost precision, so use
+                                   /// discretised normal approximation
       {
         return DiscretisedNormCDF(m, t);
       }
@@ -925,8 +971,8 @@ WrightFisher::QmApprox(int m, double100 t,
 double100 WrightFisher::UnconditionedBridgeDensity(
     double100 x, double100 z, double100 y, double100 s, double100 t,
     const Options
-        &o) /// Compute an approximation to the transition density of the
-            /// diffusion bridge when absorption can happen at any time
+        &o)  /// Compute an approximation to the transition density of the
+             /// diffusion bridge when absorption can happen at any time
 {
   assert((x > 0.0) && (x < 1.0) && (y >= 0.0) && (y <= 1.0) && (s > 0.0) &&
          (s < t));
@@ -940,12 +986,13 @@ double100 WrightFisher::UnconditionedBridgeDensity(
   int dmode = static_cast<int>(ceil(GriffithsParas(t).first)), d = dmode,
       Dflip = 1, Djm = 0, Djp = 0, mkdLower = (thetaP.empty() ? 1 : 0);
 
-  while (denom_inc > 0.0) /// As long as increments are positive, keep computing
+  while (denom_inc >
+         0.0)  /// As long as increments are positive, keep computing
   {
-    if (!(z > 0.0)) /// z = 0
+    if (!(z > 0.0))  /// z = 0
     {
       denom_inc = QmApprox(d, t, o) * pow(1.0 - x, static_cast<double100>(d));
-    } else /// z = 1
+    } else  /// z = 1
     {
       denom_inc = QmApprox(d, t, o) * pow(x, static_cast<double100>(d));
     }
@@ -954,7 +1001,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
 
     if (Dflip == -1 &&
         (dmode - Djm - 1 >=
-         mkdLower)) /// Mechanism to explore either side around the mode
+         mkdLower))  /// Mechanism to explore either side around the mode
     {
       Djm++;
       d = dmode - Djm;
@@ -969,8 +1016,8 @@ double100 WrightFisher::UnconditionedBridgeDensity(
   if ((!(y > 0.0) && ((thetaP.empty() || !(thetaP[0] > 0.0)))) ||
       (!(y < 1.0) && ((thetaP.empty() || !(thetaP[1] > 0.0))))) {
     int mMode = GriffithsParas(s).first,
-        kMode = GriffithsParas(t - s).first; /// Use these together eC to get
-                                             /// estimate of suitable threshold
+        kMode = GriffithsParas(t - s).first;  /// Use these together eC to get
+    /// estimate of suitable threshold
     double100 constcontr =
         ((!(y > 0.0) && ((thetaP.empty() || !(thetaP[0] > 0.0))))
              ? static_cast<double100>(mMode) * log(1.0 - x)
@@ -997,18 +1044,18 @@ double100 WrightFisher::UnconditionedBridgeDensity(
               exp(log(max(1.0e-300, QmApprox(m, s, o))) +
                   log(max(1.0e-300, QmApprox(k, t - s, o))) +
                   static_cast<double100>(m) * log(1.0 - x) -
-                  log(eC)); /// Putting all the separate contributions together
+                  log(eC));  /// Putting all the separate contributions together
         } else {
           num_inc =
               exp(log(max(1.0e-300, QmApprox(m, s, o))) +
                   log(max(1.0e-300, QmApprox(k, t - s, o))) +
                   static_cast<double100>(m) * log(x) -
-                  log(eC)); /// Putting all the separate contributions together
+                  log(eC));  /// Putting all the separate contributions together
         }
 
         density += num_inc;
 
-        if (!(kDownSwitch)) /// Switching mechanism for k
+        if (!(kDownSwitch))  /// Switching mechanism for k
         {
           if (sgn(k - kMode) <= 0) {
             kDownSwitch =
@@ -1037,7 +1084,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
         }
       }
 
-      if (!(mDownSwitch)) /// Switching mechanism for m
+      if (!(mDownSwitch))  /// Switching mechanism for m
       {
         if (sgn(m - mMode) <= 0) {
           mDownSwitch =
@@ -1070,10 +1117,10 @@ double100 WrightFisher::UnconditionedBridgeDensity(
     return density;
   } else if (thetaP.empty() || !(thetaP[0] > 0.0)) {
     vector<int> modeGuess = mklModeFinder(
-        x, z, s, t, o); /// Compute mode over (m,k,l) to use as start points
+        x, z, s, t, o);  /// Compute mode over (m,k,l) to use as start points
     int mMode = modeGuess[0], kMode = modeGuess[1],
-        lMode = modeGuess[2]; /// Use these estimates together with eC as a
-                              /// gauge for suitable threshold
+        lMode = modeGuess[2];  /// Use these estimates together with eC as a
+    /// gauge for suitable threshold
     double100 ycontr, xcontr;
     if (((lMode == 0) && (!(z > 0.0))) || ((lMode == mMode) && (!(z < 1.0)))) {
       xcontr =
@@ -1104,7 +1151,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
     /// Allows to avoid calling beta functions, and thus faster
     while (!mSwitch) {
       double100 qm = max(1.0e-300, QmApprox(m, s, o));
-      if (m != mMode) /// Increment m contributions accordingly
+      if (m != mMode)  /// Increment m contributions accordingly
       {
         if (mU > mD) {
           mContr_U += log(static_cast<double100>(theta + (m - 1)));
@@ -1121,7 +1168,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
       bool kSwitch = false, kDownSwitch = false, kUpSwitch = false;
       double100 kContr_D = static_cast<double100>(k) *
                            (!(z > 0.0) ? log(1.0 - y) : log(y)),
-                kContr_U = kContr_D, kContr; /// Calculate k contributions
+                kContr_U = kContr_D, kContr;  /// Calculate k contributions
 
       while (!kSwitch) {
         double100 qk = max(1.0e-300, QmApprox(k, t - s, o));
@@ -1144,9 +1191,9 @@ double100 WrightFisher::UnconditionedBridgeDensity(
                           ? m - 1
                           : ((!(thetaP[1] > 0.0) && !(z < 1.0)) ? m - 1 : m));
         int lFlip = 1, newlMode = min(lMode, lUpper), l = newlMode, lU = 0,
-            lD = 0; /// Need to ensure l <= m as m changes!
+            lD = 0;  /// Need to ensure l <= m as m changes!
         bool lSwitch = false, lDownSwitch = false,
-             lUpSwitch = false; /// Compute l contributions
+             lUpSwitch = false;  /// Compute l contributions
         boost::math::binomial_distribution<double100> BIN(m, x);
         double100 lContr_D =
             log(pdf(BIN, l)) + static_cast<double100>(l) * log(y) +
@@ -1177,10 +1224,10 @@ double100 WrightFisher::UnconditionedBridgeDensity(
           }
           double100 density_inc =
               exp(constContr + mContr + kContr + lContr -
-                  log(eC)); /// Putting all separate contributions together
+                  log(eC));  /// Putting all separate contributions together
           density += density_inc;
 
-          if (!(lDownSwitch)) /// Switching mechanism for l
+          if (!(lDownSwitch))  /// Switching mechanism for l
           {
             if (sgn(l - newlMode) <= 0) {
               lDownSwitch =
@@ -1212,7 +1259,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
           }
         }
 
-        if (!(kDownSwitch)) /// Switching mechanism for k
+        if (!(kDownSwitch))  /// Switching mechanism for k
         {
           if (sgn(k - kMode) <= 0) {
             kDownSwitch =
@@ -1241,7 +1288,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
         }
       }
 
-      if (!(mDownSwitch)) /// Switching mechanism for m
+      if (!(mDownSwitch))  /// Switching mechanism for m
       {
         if (sgn(m - mMode) <= 0) {
           mDownSwitch =
@@ -1274,10 +1321,10 @@ double100 WrightFisher::UnconditionedBridgeDensity(
     return density;
   } else {
     vector<int> modeGuess = mklModeFinder(
-        x, z, s, t, o); /// Compute mode over (m,k,l) to use as start points
+        x, z, s, t, o);  /// Compute mode over (m,k,l) to use as start points
     int mMode = modeGuess[0], kMode = modeGuess[1],
-        lMode = modeGuess[2]; /// Use these estimates together with eC as a
-                              /// gauge for suitable threshold
+        lMode = modeGuess[2];  /// Use these estimates together with eC as a
+    /// gauge for suitable threshold
     double100 xcontr, ycontr;
     if (lMode == 0) {
       xcontr = static_cast<double100>(mMode) * log(x);
@@ -1306,7 +1353,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
     /// Allows to avoid calling beta functions, and thus faster
     while (!mSwitch) {
       double100 qm = max(1.0e-300, QmApprox(m, s, o));
-      if (m != mMode) /// Increment m contributions accordingly
+      if (m != mMode)  /// Increment m contributions accordingly
       {
         if (mU > mD) {
           mContr_U += log(static_cast<double100>(theta + (m - 1)));
@@ -1322,7 +1369,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
       int k = kMode, kFlip = 1, kD = 0, kU = 0;
       bool kSwitch = false, kDownSwitch = false, kUpSwitch = false;
       double100 kContr_D = static_cast<double100>(k) * log(y),
-                kContr_U = kContr_D, kContr; /// Calculate k contributions
+                kContr_U = kContr_D, kContr;  /// Calculate k contributions
 
       while (!kSwitch) {
         double100 qk = max(1.0e-300, QmApprox(k, t - s, o));
@@ -1339,7 +1386,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
         }
 
         int lFlip = 1, newlMode = min(lMode, m), l = newlMode, lU = 0,
-            lD = 0; /// Need to ensure l <= m as m changes!
+            lD = 0;  /// Need to ensure l <= m as m changes!
         int lLower =
                 (thetaP.empty() ? 1
                                 : ((!(thetaP[0] > 0.0) && !(z > 0.0)) ? 1 : 0)),
@@ -1347,7 +1394,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
                           ? m - 1
                           : ((!(thetaP[1] > 0.0) && !(z < 1.0)) ? m - 1 : m));
         bool lSwitch = false, lDownSwitch = false,
-             lUpSwitch = false; /// Compute l contributions
+             lUpSwitch = false;  /// Compute l contributions
         boost::math::binomial_distribution<double100> BIN(m, x);
         double100 lContr_D =
             log(pdf(BIN, l)) + static_cast<double100>(l) * log(y) +
@@ -1378,10 +1425,10 @@ double100 WrightFisher::UnconditionedBridgeDensity(
           }
           double100 density_inc =
               exp(constContr + mContr + kContr + lContr -
-                  log(eC)); /// Putting all separate contributions together
+                  log(eC));  /// Putting all separate contributions together
           density += density_inc;
 
-          if (!(lDownSwitch)) /// Switching mechanism for l
+          if (!(lDownSwitch))  /// Switching mechanism for l
           {
             if (sgn(l - newlMode) <= 0) {
               lDownSwitch =
@@ -1413,7 +1460,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
           }
         }
 
-        if (!(kDownSwitch)) /// Switching mechanism for k
+        if (!(kDownSwitch))  /// Switching mechanism for k
         {
           if (sgn(k - kMode) <= 0) {
             kDownSwitch =
@@ -1442,7 +1489,7 @@ double100 WrightFisher::UnconditionedBridgeDensity(
         }
       }
 
-      if (!(mDownSwitch)) /// Switching mechanism for m
+      if (!(mDownSwitch))  /// Switching mechanism for m
       {
         if (sgn(m - mMode) <= 0) {
           mDownSwitch =
@@ -1478,8 +1525,8 @@ double100 WrightFisher::UnconditionedBridgeDensity(
 
 double100 WrightFisher::BridgeDenom(
     double100 x, double100 z, double100 y, double100 s, double100 t,
-    const Options &o) /// Compute an approximation to the denominator for the
-                      /// transition density of the diffusion bridge
+    const Options &o)  /// Compute an approximation to the denominator for the
+                       /// transition density of the diffusion bridge
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
@@ -1488,9 +1535,9 @@ double100 WrightFisher::BridgeDenom(
   int dmode = static_cast<int>(ceil(GriffithsParas(t).first)), d = dmode,
       Dflip = 1, Djm = 0, Djp = 0;
 
-  while (inc > 0.0) /// As long as increments are positive, keep computing
+  while (inc > 0.0)  /// As long as increments are positive, keep computing
   {
-    if ((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0)) /// x,z in (0,1)
+    if ((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0))  /// x,z in (0,1)
     {
       double100 betabin = 0.0;
       for (int f = 0; f != d + 1; f++) {
@@ -1504,7 +1551,7 @@ double100 WrightFisher::BridgeDenom(
 
       inc = QmApprox(d, t, o) * betabin;
     } else if ((z > 0.0) && (z < 1.0) &&
-               (!(x > 0.0) || !(x < 1.0))) /// x in {0,1}, z in (0,1)
+               (!(x > 0.0) || !(x < 1.0)))  /// x in {0,1}, z in (0,1)
     {
       double100 para1 = (!(x > 0.0) ? thetaP[0]
                                     : static_cast<double100>(thetaP[0] + d)),
@@ -1513,7 +1560,7 @@ double100 WrightFisher::BridgeDenom(
       boost::math::beta_distribution<double100> BETAZ(para1, para2);
       inc = QmApprox(d, t, o) * pdf(BETAZ, z);
     } else if ((x > 0.0) && (x < 1.0) &&
-               (!(z > 0.0) || !(z < 1.0))) /// x in (0,1), z in {0,1}
+               (!(z > 0.0) || !(z < 1.0)))  /// x in (0,1), z in {0,1}
     {
       double100 para1 = (!(z > 0.0) ? thetaP[0]
                                     : static_cast<double100>(thetaP[0] + d)),
@@ -1523,14 +1570,14 @@ double100 WrightFisher::BridgeDenom(
                                    : pow(x, static_cast<double100>(d)));
       inc = QmApprox(d, t, o) * xcon *
             (1.0 / boost::math::beta<double100>(para1, para2));
-    } else if (!(x < z) && !(x > z)) /// x,z in {0,1} and x=z
+    } else if (!(x < z) && !(x > z))  /// x,z in {0,1} and x=z
     {
       double100 para1 = (!(x > 0.0) ? thetaP[0]
                                     : static_cast<double100>(thetaP[0] + d)),
                 para2 = (!(x > 0.0) ? static_cast<double100>(thetaP[1] + d)
                                     : thetaP[1]);
       inc = QmApprox(d, t, o) / boost::math::beta<double100>(para1, para2);
-    } else /// x,z in {0,1} and x!=z
+    } else  /// x,z in {0,1} and x!=z
     {
       return QmApprox(0, t, o) /
              boost::math::beta<double100>(thetaP[0], thetaP[1]);
@@ -1539,7 +1586,7 @@ double100 WrightFisher::BridgeDenom(
     denom += inc;
 
     if (Dflip == -1 &&
-        (dmode - Djm > 0)) /// Mechanism to explore either side around the mode
+        (dmode - Djm > 0))  /// Mechanism to explore either side around the mode
     {
       Djm++;
       d = dmode - Djm;
@@ -1556,7 +1603,7 @@ double100 WrightFisher::BridgeDenom(
 
 double100 WrightFisher::ComputeDensity1(
     double100 x, double100 z, double100 y, double100 s, double100 t,
-    const Options &o) /// Compute bridge density when x,z in (0,1) (any theta!)
+    const Options &o)  /// Compute bridge density when x,z in (0,1) (any theta!)
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
@@ -1565,10 +1612,10 @@ double100 WrightFisher::ComputeDensity1(
   }
 
   vector<int> modeGuess = mkljModeFinder(
-      x, z, s, t, o); /// Compute mode over (m,k,l,j) to use as start points
+      x, z, s, t, o);  /// Compute mode over (m,k,l,j) to use as start points
   int mMode = modeGuess[0], kMode = modeGuess[1], lMode = modeGuess[2],
-      jMode = modeGuess[3]; /// Use these estimates together with eC as a gauge
-                            /// for suitable threshold
+      jMode = modeGuess[3];  /// Use these estimates together with eC as a gauge
+  /// for suitable threshold
   double100 qmmode = max(1.0e-300, QmApprox(mMode, s, o)),
             qkmode = max(1.0e-300, QmApprox(kMode, t - s, o));
   boost::math::binomial_distribution<> BINx(mMode, x), BINy(kMode, y);
@@ -1590,11 +1637,11 @@ double100 WrightFisher::ComputeDensity1(
   double100 mContr_D = boost::math::lgamma(
                 static_cast<double100>(thetaP[0] + thetaP[1] + m)),
             mContr_U = mContr_D,
-            mContr; /// Compute contributions depending only on m
+            mContr;  /// Compute contributions depending only on m
   /// Allows to avoid calling beta functions, and thus faster
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
-    if (m != mMode) /// Increment m contributions accordingly
+    if (m != mMode)  /// Increment m contributions accordingly
     {
       if (mU > mD) {
         mContr_U +=
@@ -1613,7 +1660,7 @@ double100 WrightFisher::ComputeDensity1(
     bool kSwitch = false, kDownSwitch = false, kUpSwitch = false;
     double100 kContr_D = boost::math::lgamma(
                   static_cast<double100>(thetaP[0] + thetaP[1] + k)),
-              kContr_U = kContr_D, kContr; /// Calculate k contributions
+              kContr_U = kContr_D, kContr;  /// Calculate k contributions
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
@@ -1632,10 +1679,10 @@ double100 WrightFisher::ComputeDensity1(
       }
 
       int lFlip = 1, lU = 0, lD = 0, newlMode = min(lMode, m),
-          l = newlMode; /// Need to ensure l <= m since m changes!
+          l = newlMode;  /// Need to ensure l <= m since m changes!
       bool lSwitch = false, lDownSwitch = false, lUpSwitch = false;
       boost::math::binomial_distribution<double100> BINL(
-          m, x); /// Contributions from l
+          m, x);  /// Contributions from l
       double100 lContr_D =
           (log(pdf(BINL, l)) -
            boost::math::lgamma(static_cast<double100>(thetaP[0] + l)) -
@@ -1670,11 +1717,12 @@ double100 WrightFisher::ComputeDensity1(
         }
 
         int jFlip = 1, jU = 0, jD = 0, newjMode = min(jMode, k),
-            j = newjMode; /// Need to ensure j <= k as k changes!
+            j = newjMode;  /// Need to ensure j <= k as k changes!
         bool jSwitch = false, jDownSwitch = false,
-             jUpSwitch = false; /// Compute j contributions
+             jUpSwitch = false;  /// Compute j contributions
+
         double100 jContr_D =
-            log(boost::math::binomial_coefficient<double100>(k, j)) -
+            LogBinomialCoefficientCalculator(k, j) -
             boost::math::lgamma(static_cast<double100>(thetaP[0] + j)) -
             boost::math::lgamma(static_cast<double100>(thetaP[1] + k - j)) +
             static_cast<double100>(thetaP[0] + j - 1) * log(z) +
@@ -1709,10 +1757,10 @@ double100 WrightFisher::ComputeDensity1(
 
           double100 density_inc =
               exp(mContr + kContr + lContr + jContr -
-                  log(eC)); /// Put all separate contributions together
+                  log(eC));  /// Put all separate contributions together
           density += density_inc;
 
-          if (!(jDownSwitch)) /// Check whether we can still move downwards
+          if (!(jDownSwitch))  /// Check whether we can still move downwards
           {
             if (sgn(j - newjMode) <= 0) {
               jDownSwitch =
@@ -1720,7 +1768,7 @@ double100 WrightFisher::ComputeDensity1(
             }
           }
 
-          if (!(jUpSwitch)) /// Check whether we can still move downwards
+          if (!(jUpSwitch))  /// Check whether we can still move downwards
           {
             if (sgn(j - newjMode) >= 0) {
               jUpSwitch =
@@ -1729,9 +1777,9 @@ double100 WrightFisher::ComputeDensity1(
           }
 
           jSwitch = (jDownSwitch &&
-                     jUpSwitch); /// Decide if we can move out and change l
+                     jUpSwitch);  /// Decide if we can move out and change l
 
-          if (!jSwitch) /// If we cannot, we need to move upwards or downwards
+          if (!jSwitch)  /// If we cannot, we need to move upwards or downwards
           {
             if ((jFlip == 1 && (newjMode + jU + 1 <= k)) ||
                 (jDownSwitch && !(jUpSwitch))) {
@@ -1747,9 +1795,9 @@ double100 WrightFisher::ComputeDensity1(
           }
         }
 
-        if (!(lDownSwitch)) /// Same procedure as for j contributions, but now
-                            /// we don't need to worry about increments being
-                            /// below threshold
+        if (!(lDownSwitch))  /// Same procedure as for j contributions, but now
+                             /// we don't need to worry about increments being
+                             /// below threshold
         {
           if (sgn(l - newlMode) <= 0) {
             lDownSwitch = (((jU == 0) && (jD == 0)) || (newlMode - lD - 1) < 0);
@@ -1779,7 +1827,7 @@ double100 WrightFisher::ComputeDensity1(
         }
       }
 
-      if (!(kDownSwitch)) /// Same switching procedure as for l
+      if (!(kDownSwitch))  /// Same switching procedure as for l
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = (((lU == 0) && (lD == 0)) || (kMode - kD - 1 < 0));
@@ -1807,7 +1855,7 @@ double100 WrightFisher::ComputeDensity1(
       }
     }
 
-    if (!(mDownSwitch)) /// Same switching procedure as for k
+    if (!(mDownSwitch))  /// Same switching procedure as for k
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -1842,7 +1890,7 @@ double100 WrightFisher::ComputeDensity1(
 double100 WrightFisher::ComputeDensity2(
     double100 x, double100 z, double100 y, double100 s, double100 t,
     const Options
-        &o) /// Compute bridge density when x in {0,1},z in (0,1) (any theta!)
+        &o)  /// Compute bridge density when x in {0,1},z in (0,1) (any theta!)
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
@@ -1851,10 +1899,10 @@ double100 WrightFisher::ComputeDensity2(
   }
 
   vector<int> modeGuess = mkjModeFinder(
-      x, z, s, t, o); /// Compute mode over (m,k,j) to use as start points
+      x, z, s, t, o);  /// Compute mode over (m,k,j) to use as start points
   int mMode = modeGuess[0], kMode = modeGuess[1],
-      jMode = modeGuess[2]; /// Use these estimates together with eC as a gauge
-                            /// for suitable threshold
+      jMode = modeGuess[2];  /// Use these estimates together with eC as a gauge
+  /// for suitable threshold
   double100 qmmode = max(1.0e-300, QmApprox(mMode, s, o)),
             qkmode = max(1.0e-300, QmApprox(kMode, t - s, o));
   double100 p1 = static_cast<double100>(!(x > 0.0) ? thetaP[0]
@@ -1895,7 +1943,7 @@ double100 WrightFisher::ComputeDensity2(
   /// Allows to avoid calling beta functions, and thus faster
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
-    if (m != mMode) /// Increment m contributions accordingly
+    if (m != mMode)  /// Increment m contributions accordingly
     {
       if (mU > mD) {
         mContr_U +=
@@ -1922,7 +1970,7 @@ double100 WrightFisher::ComputeDensity2(
     bool kSwitch = false, kDownSwitch = false, kUpSwitch = false;
     double100 kContr_D = boost::math::lgamma(
                   static_cast<double100>(thetaP[0] + thetaP[1] + k)),
-              kContr_U = kContr_D, kContr; /// Calculate k contributions
+              kContr_U = kContr_D, kContr;  /// Calculate k contributions
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
@@ -1941,11 +1989,12 @@ double100 WrightFisher::ComputeDensity2(
       }
 
       int jFlip = 1, newjMode = min(jMode, k), j = newjMode, jU = 0,
-          jD = 0; /// Need to ensure j <= k as k changes!
+          jD = 0;  /// Need to ensure j <= k as k changes!
       bool jSwitch = false, jDownSwitch = false,
-           jUpSwitch = false; /// Compute j contributions
+           jUpSwitch = false;  /// Compute j contributions
+
       double100 jContr_D =
-          log(boost::math::binomial_coefficient<double100>(k, j)) -
+          LogBinomialCoefficientCalculator(k, j) -
           boost::math::lgamma(static_cast<double100>(thetaP[0] + j)) -
           boost::math::lgamma(static_cast<double100>(thetaP[1] + k - j)) +
           static_cast<double100>(thetaP[0] + j) * log(z) +
@@ -1979,11 +2028,11 @@ double100 WrightFisher::ComputeDensity2(
         }
         double100 density_inc =
             exp(constContr + mContr + kContr + jContr -
-                log(eC)); /// Putting all separate contributions together
+                log(eC));  /// Putting all separate contributions together
         density += density_inc;
 
-        if (!(jDownSwitch)) /// Switching mechnism for j, exactly as in
-                            /// ComputeDensity1 function
+        if (!(jDownSwitch))  /// Switching mechnism for j, exactly as in
+                             /// ComputeDensity1 function
         {
           if (sgn(j - newjMode) <= 0) {
             jDownSwitch =
@@ -2014,7 +2063,7 @@ double100 WrightFisher::ComputeDensity2(
         }
       }
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = (((jU == 0) && (jD == 0)) || (kMode - kD - 1 < 0));
@@ -2042,7 +2091,7 @@ double100 WrightFisher::ComputeDensity2(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -2077,7 +2126,7 @@ double100 WrightFisher::ComputeDensity2(
 double100 WrightFisher::ComputeDensity3(
     double100 x, double100 z, double100 y, double100 s, double100 t,
     const Options
-        &o) /// Compute bridge density when x,z in {0,1}, x=z (any theta!)
+        &o)  /// Compute bridge density when x,z in {0,1}, x=z (any theta!)
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
@@ -2085,10 +2134,10 @@ double100 WrightFisher::ComputeDensity3(
     return 0.0;
   }
 
-  vector<int> modeGuess = mkModeFinder(x, z, s, t, o); /// Find mode over (m,k)
+  vector<int> modeGuess = mkModeFinder(x, z, s, t, o);  /// Find mode over (m,k)
   int mMode = modeGuess[0],
-      kMode = modeGuess[1]; /// Use these together eC to get estimate of
-                            /// suitable threshold
+      kMode = modeGuess[1];  /// Use these together eC to get estimate of
+  /// suitable threshold
   double100 qmmode = max(1.0e-300, QmApprox(mMode, s, o)),
             qkmode = max(1.0e-300, QmApprox(kMode, t - s, o));
   double100 th1 = static_cast<double100>(!(x > 0.0) ? thetaP[0] : thetaP[1]),
@@ -2127,7 +2176,7 @@ double100 WrightFisher::ComputeDensity3(
                  static_cast<double100>(m) * log(1.0 - y)
            : -boost::math::lgamma(static_cast<double100>(thetaP[0] + m)) +
                  static_cast<double100>(m) * log(y));
-  double100 mContr_U = mContr_D, mContr; /// Contributions from m
+  double100 mContr_U = mContr_D, mContr;  /// Contributions from m
 
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
@@ -2163,7 +2212,7 @@ double100 WrightFisher::ComputeDensity3(
                     static_cast<double100>(k) * log(1.0 - y)
               : -boost::math::lgamma(static_cast<double100>(thetaP[0] + k)) +
                     static_cast<double100>(k) * log(y)));
-    double100 kContr_U = kContr_D, kContr; /// Contributions from k
+    double100 kContr_U = kContr_D, kContr;  /// Contributions from k
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
@@ -2193,10 +2242,10 @@ double100 WrightFisher::ComputeDensity3(
 
       double100 density_inc =
           exp(constContr + mContr + kContr -
-              log(eC)); /// Putting all the separate contributions together
+              log(eC));  /// Putting all the separate contributions together
       density += density_inc;
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = ((density_inc < threshold) || (kMode - kD - 1 < 0));
@@ -2224,7 +2273,7 @@ double100 WrightFisher::ComputeDensity3(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -2259,7 +2308,7 @@ double100 WrightFisher::ComputeDensity3(
 double100 WrightFisher::ComputeDensity4(
     double100 x, double100 z, double100 y, double100 s, double100 t,
     const Options
-        &o) /// Compute bridge density when x,z in {0,1}, x!=z (any theta!)
+        &o)  /// Compute bridge density when x,z in {0,1}, x!=z (any theta!)
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
@@ -2267,9 +2316,9 @@ double100 WrightFisher::ComputeDensity4(
     return 0.0;
   }
 
-  vector<int> modeGuess = mkModeFinder(x, z, s, t, o); /// Find mode over (m,k)
+  vector<int> modeGuess = mkModeFinder(x, z, s, t, o);  /// Find mode over (m,k)
   int mMode = modeGuess[0],
-      kMode = modeGuess[1]; /// Use together with eC to get suitable threshold
+      kMode = modeGuess[1];  /// Use together with eC to get suitable threshold
   double100 qmmode = max(1.0e-300, QmApprox(mMode, s, o)),
             qkmode = max(1.0e-300, QmApprox(kMode, t - s, o));
   double100 gammaratios =
@@ -2303,7 +2352,7 @@ double100 WrightFisher::ComputeDensity4(
                  static_cast<double100>(m) * log(1.0 - y)
            : -boost::math::lgamma(static_cast<double100>(thetaP[0] + m)) +
                  static_cast<double100>(m) * log(y));
-  double100 mContr_U = mContr_D, mContr; /// Contributions from m
+  double100 mContr_U = mContr_D, mContr;  /// Contributions from m
 
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
@@ -2338,7 +2387,7 @@ double100 WrightFisher::ComputeDensity4(
                     static_cast<double100>(k) * log(y)
               : -boost::math::lgamma(static_cast<double100>(thetaP[1] + k)) +
                     static_cast<double100>(k) * log(1.0 - y)));
-    double100 kContr_U = kContr_D, kContr; /// Contributions from k
+    double100 kContr_U = kContr_D, kContr;  /// Contributions from k
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
@@ -2367,10 +2416,10 @@ double100 WrightFisher::ComputeDensity4(
 
       double100 density_inc =
           exp(constContr + mContr + kContr -
-              log(eC)); /// Putting all separate contributions together
+              log(eC));  /// Putting all separate contributions together
       density += density_inc;
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = ((density_inc < threshold) || (kMode - kD - 1 < 0));
@@ -2398,7 +2447,7 @@ double100 WrightFisher::ComputeDensity4(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -2432,27 +2481,27 @@ double100 WrightFisher::ComputeDensity4(
 
 double100 WrightFisher::BridgeDensity(
     double100 x, double100 z, double100 y, double100 s, double100 t,
-    const Options &o) /// Function to determine which case from the above
-                      /// computeDensity to invoke
+    const Options &o)  /// Function to determine which case from the above
+                       /// computeDensity to invoke
 {
   assert((x >= 0.0) && (x <= 1.0) && (y >= 0.0) && (y <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (t > 0.0) && (s > 0.0) && (s < t));
 
-  if ((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0)) /// x,z in (0,1)
+  if ((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0))  /// x,z in (0,1)
   {
     return ComputeDensity1(x, z, y, s, t, o);
-  } else if ((x > 0.0) && (x < 1.0)) /// x in (0,1), z in {0,1}
+  } else if ((x > 0.0) && (x < 1.0))  /// x in (0,1), z in {0,1}
   {
     return ComputeDensity2(z, x, y, t - s, t,
-                           o); /// Equivalent to a reverse bridge going from z
-                               /// to y in time t-s and ending at x at time t
-  } else if ((z > 0.0) && (z < 1.0)) /// x in {0,1}, z in (0,1)
+                           o);  /// Equivalent to a reverse bridge going from z
+                                /// to y in time t-s and ending at x at time t
+  } else if ((z > 0.0) && (z < 1.0))  /// x in {0,1}, z in (0,1)
   {
     return ComputeDensity2(x, z, y, s, t, o);
-  } else if (x == z) /// x,z in {0,1}, x=z
+  } else if (x == z)  /// x,z in {0,1}, x=z
   {
     return ComputeDensity3(x, z, y, s, t, o);
-  } else /// x,z in {0,1}, x!=z
+  } else  /// x,z in {0,1}, x!=z
   {
     return ComputeDensity4(x, z, y, s, t, o);
   }
@@ -2460,7 +2509,7 @@ double100 WrightFisher::BridgeDensity(
 
 double100 WrightFisher::LogSumExp(
     vector<double100> &vecProb,
-    double100 maxProb) /// Routine to perform log-sum-exp trick
+    double100 maxProb)  /// Routine to perform log-sum-exp trick
 {
   double100 sumexp = 0.0;
   for (vector<double100>::iterator vPi = vecProb.begin(); vPi != vecProb.end();
@@ -2480,8 +2529,8 @@ double100 WrightFisher::LogSumExp(
 
 pair<int, int> WrightFisher::DrawAncestralProcess(
     double100 t, const Options &o,
-    boost::random::mt19937 &gen) /// Draws from the law of the Ancestral Process
-                                 /// using upper and lower sums
+    boost::random::mt19937 &gen)  /// Draws from the law of the Ancestral
+                                  /// Process using upper and lower sums
 {
   assert(t > 0.0);
   /// Pre-computing all necessary quantities
@@ -2499,12 +2548,12 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
   while (!m_found) {
     if (mup > mdown &&
         mmode - mdown >
-            threshold) /// Checking if down moves still possible - ensures we do
-                       /// not get m smaller than it should be allowed!
+            threshold)  /// Checking if down moves still possible - ensures we
+                        /// do not get m smaller than it should be allowed!
     {
       ++mdown;
       m = mmode - mdown;
-    } else /// Up moves can keep happening
+    } else  /// Up moves can keep happening
     {
       ++mup;
       m = mmode + mup;
@@ -2518,7 +2567,7 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
 
     while (n < 1 || !coefficients_converging ||
            ((dU[m]) > 1.0 &&
-            dL[m] < 0.0)) /// Checking if upper and lower sums converging
+            dL[m] < 0.0))  /// Checking if upper and lower sums converging
     {
       n += 2;
       double100 newcoefficientU =
@@ -2544,20 +2593,17 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
 
       if (o.debug > 2) {
         cerr << "\nk   ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << k << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << k << " ";
         cerr << "\ndL ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << dL[k] << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << dL[k] << " ";
         cerr << "\ndU ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << dU[k] << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << dU[k] << " ";
         cerr << endl;
       }
     }
 
     if (dL[m] > 1.0 ||
-        dU[m] < 0.0) /// If we fall out of bounds, use Gaussian approximations
+        dU[m] < 0.0)  /// If we fall out of bounds, use Gaussian approximations
     {
       cerr << "Numerical error detected: dL[" << m << "] = " << dL[m] << ", dU["
            << m << "] = " << dU[m]
@@ -2579,7 +2625,8 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
 
     bool decision_on_m_made = (currsumL > u || currsumU < u);
 
-    while (!decision_on_m_made) /// We need to refine our upper and lower bounds
+    while (
+        !decision_on_m_made)  /// We need to refine our upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -2611,14 +2658,16 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL." << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU." << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU." << endl;
+        // exit(1);
       }
 
       decision_on_m_made = (currsumL > u || currsumU < u);
@@ -2634,8 +2683,7 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
   if (o.debug > 2) {
     cerr << "d_m(t): Returned m = " << m << "\n";
     cerr << "m =\t\t\t";
-    for (int k = mmode - mdown; k <= mmode + mup; ++k)
-      cerr << k << "\t";
+    for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << k << "\t";
     cerr << "\nn_used =\t";
     for (int k = mmode - mdown; k <= mmode + mup; ++k)
       cerr << n_used[k] << "\t";
@@ -2648,8 +2696,8 @@ pair<int, int> WrightFisher::DrawAncestralProcess(
 pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
     double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of the Ancestral Process when conditioning
-              /// the diffusion on non-absorption but started from boundary
+        &gen)  /// Draws from the law of the Ancestral Process when conditioning
+               /// the diffusion on non-absorption but started from boundary
 {
   assert(t > 0.0);
   /// Pre-computing all necessary quantities
@@ -2675,12 +2723,12 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
   while (!m_found) {
     if (mup > mdown &&
         mmode - mdown >
-            threshold) /// Checking whether down moves still allow - makes sure
-                       /// m does not go below allowed values
+            threshold)  /// Checking whether down moves still allow - makes sure
+                        /// m does not go below allowed values
     {
       ++mdown;
       m = mmode - mdown;
-    } else /// Otherwise move upwards, which is always allowed
+    } else  /// Otherwise move upwards, which is always allowed
     {
       ++mup;
       m = max(mmode + mup, threshold);
@@ -2710,7 +2758,7 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
 
     while (n < F || v < F3 || !coefficients_converging ||
            ((dU[m]) > 1.0 &&
-            dL[m] < 0.0)) /// Checking if upper and lower sums converging
+            dL[m] < 0.0))  /// Checking if upper and lower sums converging
     {
       n += 2;
       n1 += 2;
@@ -2727,8 +2775,8 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
 
       if ((thetaP.empty()) &&
           (2 * (n1 + 1) >
-           q1index)) /// If mutation vector is empty, we need to subtract q_1
-                     /// from normalising constant (because m can only be >= 2)
+           q1index))  /// If mutation vector is empty, we need to subtract q_1
+                      /// from normalising constant (because m can only be >= 2)
       {
         double100 newcoefficientUq1 =
                       (((n1 - 1) % 2 != 0) ? -1.0 : 1.0) *
@@ -2745,10 +2793,10 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
         q1index += 2;
       }
 
-      if ((v + 1) >
-          eCindex_computed) /// Computing the denominator by using explicit
-                            /// expression for falling factorial moments of
-                            /// ancestral process and subtracting q_1
+      if ((v + 1) > eCindex_computed)  /// Computing the denominator by using
+                                       /// explicit expression for falling
+                                       /// factorial moments of ancestral
+                                       /// process and subtracting q_1
       {
         eCL += eCnew;
         eCnew = exp(static_cast<double100>(-(v + 1) * (v + theta) * t / 2.0) +
@@ -2772,20 +2820,17 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
 
       if (o.debug > 2) {
         cerr << "\nk   ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << k << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << k << " ";
         cerr << "\ndL ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << dL[k] << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << dL[k] << " ";
         cerr << "\ndU ";
-        for (int k = mmode - mdown; k <= mmode + mup; ++k)
-          cerr << dU[k] << " ";
+        for (int k = mmode - mdown; k <= mmode + mup; ++k) cerr << dU[k] << " ";
         cerr << endl;
       }
     }
 
     if (eAL[m] < 0.0 ||
-        eCL < 0.0) /// If we fall out of bounds, use Gaussian approximations
+        eCL < 0.0)  /// If we fall out of bounds, use Gaussian approximations
     {
       cerr << "Numerical error detected: eAL[" << m << "] = " << eAL[m]
            << ", eAU[" << m << "] = " << eAU[m] << ", eCL = " << eCL
@@ -2818,7 +2863,7 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
 
     bool decision_on_m_made = (currsumL > u || currsumU < u);
 
-    while (!decision_on_m_made) /// Refine upper and lower bounds
+    while (!decision_on_m_made)  /// Refine upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -2827,7 +2872,7 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
       for (int k = max(mmode, threshold) - mdown;
            k <= max(mmode, threshold) + mup; ++k) {
         ++n_used[k];
-        ++v_used[k]; /// Adding on more contributions to sharpen bounds
+        ++v_used[k];  /// Adding on more contributions to sharpen bounds
 
         if (thetaP.empty() && ((n_used[k] + 1) > q1index)) {
           double100 newcoefficientUq1 =
@@ -2889,14 +2934,16 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL." << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU." << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU." << endl;
+        // exit(1);
       }
 
       decision_on_m_made = (currsumL > u || currsumU < u);
@@ -2929,8 +2976,8 @@ pair<int, int> WrightFisher::DrawAncestralProcessConditionalZero(
 pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
     double100 t, double100 x, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of the Ancestral Process when conditioning
-              /// the diffusion on non-absorption but started from inside (0,1)
+        &gen)  /// Draws from the law of the Ancestral Process when conditioning
+               /// the diffusion on non-absorption but started from inside (0,1)
 {
   assert((x > 0.0) && (x <= 1.0) && (t > 0.0));
   /// Pre-computing all necessary quantities
@@ -2954,11 +3001,11 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
   while (!ml_found) {
     if (mup > mdown &&
         mmode - mdown >
-            threshold) /// Checking whether down moves are still possible
+            threshold)  /// Checking whether down moves are still possible
     {
       ++mdown;
       m = mmode - mdown;
-    } else /// If not, upward moves are always allowed
+    } else  /// If not, upward moves are always allowed
     {
       ++mup;
       m = max(mmode + mup, threshold);
@@ -2987,10 +3034,10 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
 
     while (2 * v < F || n < F || !coefficients_converging ||
            ((dU[m]) > 1.0 &&
-            dL[m] < 0.0)) /// Checking if upper and lower sums converging
+            dL[m] < 0.0))  /// Checking if upper and lower sums converging
     {
       n += 2;
-      v++; /// Adding on new contributions for numerator
+      v++;  /// Adding on new contributions for numerator
       double100 newcoefficientU =
                     (((n - m) % 2 != 0) ? -1.0 : 1.0) *
                     exp(Getlogakm<double100>(n, m) +
@@ -3001,7 +3048,7 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
                         static_cast<double100>(
                             -(n + 1) * ((n + 1) + theta - 1) * t / 2.0));
 
-      if (2 * (v + 1) > eCindex_computed) /// Computing denominator
+      if (2 * (v + 1) > eCindex_computed)  /// Computing denominator
       {
         assert(2 * v == eCindex_computed);
         eCL = eCU - Getd2(eCvec, 2 * v + 1, x, t);
@@ -3038,7 +3085,7 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
     }
 
     if (eAL[m] < 0.0 ||
-        eCL < 0.0) /// If we fall out of bounds, use Gaussian approximations
+        eCL < 0.0)  /// If we fall out of bounds, use Gaussian approximations
     {
       cerr << "Numerical error detected: eAL[" << m << "] = " << eAL[m]
            << ", eAU[" << m << "] = " << eAU[m] << ", eCL = " << eCL
@@ -3065,11 +3112,11 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
     int llimit = (threshold == 2) ? m - 1 : m;
     boost::math::binomial_distribution<double100> BIN(m, x);
     for (int l = 1; l <= llimit && !ml_found;
-         ++l) /// Adding on the corresponding binomial terms (minus the edge
-              /// cases i.e. l=0 and potentially l=m (depending on theta))
+         ++l)  /// Adding on the corresponding binomial terms (minus the edge
+               /// cases i.e. l=0 and potentially l=m (depending on theta))
     {
       double100 currsummaddon =
-          pdf(BIN, l); //( ( !(x < 1.0) || !(x > 0.0) ) ? 1.0 : pdf(BIN,l) );
+          pdf(BIN, l);  //( ( !(x < 1.0) || !(x > 0.0) ) ? 1.0 : pdf(BIN,l) );
       currsumL += currsummaddon * dL[m];
       currsumU += currsummaddon * dU[m];
 
@@ -3082,7 +3129,7 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
         exit(1);
       }
 
-      while (!decision_on_ml_made) /// Refine upper and lower bounds
+      while (!decision_on_ml_made)  /// Refine upper and lower bounds
       {
         double100 currsumLold = currsumL, currsumUold = currsumU;
         currsumL = 0.0;
@@ -3092,7 +3139,7 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
         for (int k = max(mmode, threshold) - mdown;
              k <= max(mmode, threshold) + mup; ++k) {
           ++v_used[k];
-          ++n_used[k]; /// Adding on new contributions to sharpen bounds
+          ++n_used[k];  /// Adding on new contributions to sharpen bounds
           double100 newcoefficientU =
                         exp(Getlogakm<double100>(k + 2 * n_used[k], k) +
                             static_cast<double100>(
@@ -3135,16 +3182,18 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
         }
 
         if (currsumLold > currsumL) {
-          cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-               << " = currsumL (n,m,l) = (" << n << "," << m << "," << l << ")."
-               << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumLold = " << currsumLold << " > "
+                    << currsumL << " = currsumL (n,m,l) = (" << n << "," << m
+                    << "," << l << ")." << endl;
+          // exit(1);
         }
         if (currsumUold < currsumU) {
-          cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-               << " = currsumU (n,m,l) = (" << n << "," << m << "," << l << ")."
-               << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumUold = " << currsumUold << " < "
+                    << currsumU << " = currsumU (n,m,l) = (" << n << "," << m
+                    << "," << l << ")." << endl;
+          // exit(1);
         }
 
         decision_on_ml_made = (currsumL > u || currsumU < u);
@@ -3177,26 +3226,27 @@ pair<pair<int, int>, int> WrightFisher::DrawAncestralProcessConditionalInterior(
 }
 
 int WrightFisher::DrawAncestralProcessG1984(
-    double100 t,
-    boost::random::mt19937 &gen) /// Draws from the law of the Ancestral Process
-                                 /// when time increment falls below threshold
+    double100 t, boost::random::mt19937
+                     &gen)  /// Draws from the law of the Ancestral Process when
+                            /// time increment falls below threshold
 {
   assert(t > 0.0);
-  int threshold =
-      (thetaP.empty() ? 2 : (!(thetaP[0] > 0.0) || !(thetaP[1] > 0.0)) ? 1 : 0);
+  int threshold = (thetaP.empty()                               ? 2
+                   : (!(thetaP[0] > 0.0) || !(thetaP[1] > 0.0)) ? 1
+                                                                : 0);
   /// Pre-compute all necessary quantities
   double mean = GriffithsParas(t).first, v = GriffithsParas(t).second;
   assert(v > 0.0);
   boost::random::normal_distribution<double100> NORMAL(mean, sqrt(v));
   return max(static_cast<int>(round(NORMAL(gen))),
-             threshold); // Return discretised Gaussian approximation
+             threshold);  // Return discretised Gaussian approximation
 }
 
 int WrightFisher::DrawSizebiasedAncestralProcess(
     int d, double100 t,
     boost::random::mt19937
-        &gen) /// Draws from the size-biased distribution of the Ancestral
-              /// process when the time increment falls below threshold
+        &gen)  /// Draws from the size-biased distribution of the Ancestral
+               /// process when the time increment falls below threshold
 {
   assert((d > 0) && (t > 0.0));
   /// Pre-compute all necessary quantities
@@ -3212,31 +3262,32 @@ int WrightFisher::DrawSizebiasedAncestralProcess(
   bool decision = false;
   int flip = 1, mlimit = thetaP.empty() ? 2 : 1,
       mode = static_cast<int>(round(mean)), m = mode, jp = 0,
-      jm = 0; /// Starting m from mode to speed up routine
+      jm = 0;  /// Starting m from mode to speed up routine
   double mlim = static_cast<double>(mlimit) + 0.5, summqm = 0.0;
 
   boost::random::uniform_01<double100> U01;
   double100 u = U01(gen);
 
   while (!decision) {
-    if (m == mlimit) /// Computing correct border (i.e. m = 1 or 2) contribution
+    if (m ==
+        mlimit)  /// Computing correct border (i.e. m = 1 or 2) contribution
     {
       summqm += exp(static_cast<double>(d) * log(static_cast<double>(mlim))) *
                 0.5 *
                 erfc(-(static_cast<double>(mlim) - mean) / (sqrt(2.0 * v)));
-    } else /// Add on discretised Gaussian contributions
+    } else  /// Add on discretised Gaussian contributions
     {
       summqm +=
           exp(static_cast<double>(d) * log(static_cast<double>(m))) * 0.5 *
           (erfc(-(static_cast<double>(m) + 0.5 - mean) / (sqrt(2.0 * v))) -
            erfc(-(static_cast<double>(m) - 0.5 - mean) / (sqrt(2.0 * v))));
     }
-    if (summqm / normalisation > u) /// Return last m
+    if (summqm / normalisation > u)  /// Return last m
     {
       decision = true;
     } else {
       if (flip == -1 &&
-          (mode - jm > 2)) /// Mechanism to explore either side around mode
+          (mode - jm > 2))  /// Mechanism to explore either side around mode
       {
         jm++;
         m = mode - jm;
@@ -3254,26 +3305,28 @@ int WrightFisher::DrawSizebiasedAncestralProcess(
 
 pair<double100, int> WrightFisher::DrawEndpoint(
     double100 x, double100 t1, double100 t2, const Options &o,
-    boost::random::mt19937 &gen) /// Draws from the law of a Wright-Fisher
-                                 /// diffusion conditioned on non-absorption
+    boost::random::mt19937 &gen)  /// Draws from the law of a Wright-Fisher
+                                  /// diffusion conditioned on non-absorption
 {
-  assert((x >= 0.0) && (x <= 1.0) && (t1 >= 0.0) && (t2 > 0.0) && (t1 < t2));
+  // std::cout << "x is " << x << ", t1 is " << t1 << ", t2 is " << t2
+  //           << std::endl;
+  assert((x >= 0.0) && (x <= 1.0) && (t1 < t2));
   double100 y;
   int m, coeffcount;
   pair<int, int> m_and_coeffcount;
 
-  if (thetaP.empty()) /// No mutation - condition on avoiding either boundary
+  if (thetaP.empty())  /// No mutation - condition on avoiding either boundary
   {
     if (!(x >
-          0.0)) /// Diffusion conditioned on non-absorption but started from 0
+          0.0))  /// Diffusion conditioned on non-absorption but started from 0
     {
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawSizebiasedAncestralProcess(1, t2 - t1, gen);
         coeffcount = -1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         m_and_coeffcount = DrawAncestralProcessConditionalZero(t2 - t1, o, gen);
         m = m_and_coeffcount.first;
@@ -3284,21 +3337,21 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(static_cast<double>(m) - 1.0, 1.0);
 
       y = -1.0;
-      while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y = G1 / (G1 + G2);
       }
-    } else if (!(x < 1.0)) /// Diffusion conditioned on non-absorption but
-                           /// started from 1
+    } else if (!(x < 1.0))  /// Diffusion conditioned on non-absorption but
+                            /// started from 1
     {
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawSizebiasedAncestralProcess(1, t2 - t1, gen);
         coeffcount = -1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         m_and_coeffcount = DrawAncestralProcessConditionalZero(t2 - t1, o, gen);
         m = m_and_coeffcount.first;
@@ -3310,19 +3363,19 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(1.0, 1.0);
 
       y = -1.0;
-      while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y = G1 / (G1 + G2);
       }
-    } else /// Diffusion conditioned on non-absorption but started from the
-           /// interior (0,1)
+    } else  /// Diffusion conditioned on non-absorption but started from the
+            /// interior (0,1)
     {
       int l;
 
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawAncestralProcessG1984(t2 - t1, gen);
         coeffcount = -1;
@@ -3335,7 +3388,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
         boost::random::discrete_distribution<> CATEGORICAL(binomialBins.begin(),
                                                            binomialBins.end());
         l = CATEGORICAL(gen) + 1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         pair<pair<int, int>, int> storer =
             DrawAncestralProcessConditionalInterior(t2 - t1, x, o, gen);
@@ -3348,26 +3401,27 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(static_cast<double>(m - l), 1.0);
 
       y = -1.0;
-      while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y = G1 / (G1 + G2);
       }
     }
   } else if ((!(thetaP[0] > 0.0)) ||
-             (!(thetaP[1] > 0.0))) /// One sided mutation - condition on
-                                   /// avoiding one boundary only
+             (!(thetaP[1] > 0.0)))  /// One sided mutation - condition on
+                                    /// avoiding one boundary only
   {
     if ((!(thetaP[0] > 0.0)) &&
-        (!(x > 0.0))) /// Diffusion conditioned on avoiding 0 but started from 0
+        (!(x >
+           0.0)))  /// Diffusion conditioned on avoiding 0 but started from 0
     {
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawSizebiasedAncestralProcess(1, t2 - t1, gen);
         coeffcount = -1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         m_and_coeffcount = DrawAncestralProcessConditionalZero(t2 - t1, o, gen);
         m = m_and_coeffcount.first;
@@ -3378,26 +3432,26 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(thetaP[1] + static_cast<double>(m) - 1.0, 1.0);
 
       y = -1.0;
-      while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y = G1 / (G1 + G2);
       }
     } else if ((!(thetaP[1] > 0.0)) &&
-               (!(x < 1.0))) /// Diffusion conditioned on avoiding 1 but started
-                             /// from 1 - can translate to diffusion with
-                             /// mutation entries swapped avoiding 0 started
-                             /// from 0 by symmetry
+               (!(x < 1.0)))  /// Diffusion conditioned on avoiding 1 but
+                              /// started from 1 - can translate to diffusion
+                              /// with mutation entries swapped avoiding 0
+                              /// started from 0 by symmetry
     {
-      iter_swap(thetaP.begin(), thetaP.begin() + 1); /// Swap mutation entries
+      iter_swap(thetaP.begin(), thetaP.begin() + 1);  /// Swap mutation entries
 
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawSizebiasedAncestralProcess(1, t2 - t1, gen);
         coeffcount = -1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         m_and_coeffcount = DrawAncestralProcessConditionalZero(t2 - t1, o, gen);
         m = m_and_coeffcount.first;
@@ -3408,7 +3462,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(thetaP[1] + static_cast<double>(m) - 1.0, 1.0);
 
       double100 y1 = -1.0;
-      while (!(0.0 < y1 && y1 < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y1 && y1 < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y1 = G1 / (G1 + G2);
@@ -3417,20 +3471,20 @@ pair<double100, int> WrightFisher::DrawEndpoint(
       y = 1.0 - y1;
 
       iter_swap(thetaP.begin(),
-                thetaP.begin() + 1); /// Swap back mutation entries
+                thetaP.begin() + 1);  /// Swap back mutation entries
     } else if (!(thetaP[1] >
-                 0.0)) /// Diffusion conditioned on avoiding 1 but started from
-                       /// x in [0,1) - can translate to diffusion with mutation
-                       /// entries swapped avoiding 0 started from 1-x in
-                       /// interior (0,1] by symmetry
+                 0.0))  /// Diffusion conditioned on avoiding 1 but started from
+                        /// x in [0,1) - can translate to diffusion with
+                        /// mutation entries swapped avoiding 0 started from 1-x
+                        /// in interior (0,1] by symmetry
     {
-      iter_swap(thetaP.begin(), thetaP.begin() + 1); /// Swap mutation entries
+      iter_swap(thetaP.begin(), thetaP.begin() + 1);  /// Swap mutation entries
 
       int l;
 
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawAncestralProcessG1984(t2 - t1, gen);
         coeffcount = -1;
@@ -3442,7 +3496,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
         boost::random::discrete_distribution<> CATEGORICAL(binomialBins.begin(),
                                                            binomialBins.end());
         l = CATEGORICAL(gen) + 1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         pair<pair<int, int>, int> storer =
             DrawAncestralProcessConditionalInterior(t2 - t1, 1.0 - x, o, gen);
@@ -3456,7 +3510,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(thetaP[1] + static_cast<double>(m - l), 1.0);
 
       double100 y1 = -1.0;
-      while (!(0.0 < y1 && y1 < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y1 && y1 < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y1 = G1 / (G1 + G2);
@@ -3464,14 +3518,14 @@ pair<double100, int> WrightFisher::DrawEndpoint(
       y = 1.0 - y1;
 
       iter_swap(thetaP.begin(),
-                thetaP.begin() + 1); /// Swap mutation entries back
-    } else /// Diffusion conditioned on avoiding 0 but started from x in (0,1]
+                thetaP.begin() + 1);  /// Swap mutation entries back
+    } else  /// Diffusion conditioned on avoiding 0 but started from x in (0,1]
     {
       int l;
 
       if (t2 - t1 <=
-          o.g1984threshold) /// Time increment smaller than threshold, use
-                            /// Gaussian approximations
+          o.g1984threshold)  /// Time increment smaller than threshold, use
+                             /// Gaussian approximations
       {
         m = DrawAncestralProcessG1984(t2 - t1, gen);
         coeffcount = -1;
@@ -3483,7 +3537,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
         boost::random::discrete_distribution<> CAT(binomialBins.begin(),
                                                    binomialBins.end());
         l = CAT(gen) + 1;
-      } else /// Otherwise use alternating series technique
+      } else  /// Otherwise use alternating series technique
       {
         pair<pair<int, int>, int> storer =
             DrawAncestralProcessConditionalInterior(t2 - t1, x, o, gen);
@@ -3497,22 +3551,21 @@ pair<double100, int> WrightFisher::DrawEndpoint(
           GAMMA2(thetaP[1] + static_cast<double100>(m - l), 1.0);
 
       y = -1.0;
-      while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+      while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
       {
         double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
         y = G1 / (G1 + G2);
       }
     }
-  } else /// Strictly positive entries in mutation vector, so unconditioned
-         /// diffusion
+  } else  /// Strictly positive entries in mutation vector, so unconditioned
+          /// diffusion
   {
-
-    if (t2 - t1 <= o.g1984threshold) /// Time increment smaller than threshold,
-                                     /// use Gaussian approximations
+    if (t2 - t1 <= o.g1984threshold)  /// Time increment smaller than threshold,
+                                      /// use Gaussian approximations
     {
       m = DrawAncestralProcessG1984(t2 - t1, gen);
       coeffcount = -1;
-    } else /// Otherwise use alternating series technique
+    } else  /// Otherwise use alternating series technique
     {
       m_and_coeffcount = DrawAncestralProcess(t2 - t1, o, gen);
       m = m_and_coeffcount.first;
@@ -3528,7 +3581,7 @@ pair<double100, int> WrightFisher::DrawEndpoint(
         GAMMA2(thetaP[1] + static_cast<double100>(m - l), 1.0);
 
     y = -1.0;
-    while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+    while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
     {
       double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
       y = G1 / (G1 + G2);
@@ -3540,23 +3593,24 @@ pair<double100, int> WrightFisher::DrawEndpoint(
 
 pair<double100, int> WrightFisher::DrawUnconditionedDiffusion(
     double100 x, double100 t, const Options &o,
-    boost::random::mt19937
-        &gen) /// Draws from the law of an unconditioned Wright-Fisher diffusion
+    boost::random::mt19937 &
+        gen)  /// Draws from the law of an unconditioned Wright-Fisher diffusion
 {
   assert((x >= 0.0) && (x <= 1.0) && (t > 0.0));
 
-  if (!(x > 0.0) && (thetaP.empty() ||
-                     (!(thetaP[0] > 0.0)))) /// If we start at 0 and there is no
-                                            /// mutation, diffusion stays there
+  if (!(x > 0.0) &&
+      (thetaP.empty() ||
+       (!(thetaP[0] > 0.0))))  /// If we start at 0 and there is no
+                               /// mutation, diffusion stays there
   {
     return make_pair(0.0, -1);
   } else if (!(x < 1.0) &&
              (thetaP.empty() ||
               (!(thetaP[1] >
-                 0.0)))) /// Similarly if started from 1 with no mutation
+                 0.0))))  /// Similarly if started from 1 with no mutation
   {
     return make_pair(1.0, -1);
-  } else /// Otherwise we first draw M ~ {q_m}
+  } else  /// Otherwise we first draw M ~ {q_m}
   {
     int m, coefcount;
     if (t <= o.g1984threshold) {
@@ -3569,10 +3623,10 @@ pair<double100, int> WrightFisher::DrawUnconditionedDiffusion(
     }
 
     double100 para1, para2;
-    boost::random::binomial_distribution<> BIN(m, x); /// Draw L ~ Bin(m,x)
+    boost::random::binomial_distribution<> BIN(m, x);  /// Draw L ~ Bin(m,x)
     int l = BIN(gen);
 
-    if (thetaP.empty()) /// Sort out cases based on what mutation parameters is
+    if (thetaP.empty())  /// Sort out cases based on what mutation parameters is
     {
       if (l == 0) {
         return make_pair(0.0, coefcount);
@@ -3604,7 +3658,7 @@ pair<double100, int> WrightFisher::DrawUnconditionedDiffusion(
     boost::random::gamma_distribution<double100> GAMMA1(para1, 1.0),
         GAMMA2(para2, 1.0);
     double100 y = -1.0;
-    while (!(0.0 < y && y < 1.0)) /// Occasionally get y == 0.0 or y == 1.0
+    while (!(0.0 < y && y < 1.0))  /// Occasionally get y == 0.0 or y == 1.0
     {
       double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
       y = G1 / (G1 + G2);
@@ -3618,55 +3672,57 @@ pair<double100, int> WrightFisher::DrawUnconditionedDiffusion(
 
 vector<vector<double100>> WrightFisher::NonNeutralDraw(
     double100 x, double100 t1, double100 t2, bool Absorption, const Options &o,
-    boost::random::mt19937 &gen) /// Draws of paths from non-neutral WF
-                                 /// diffusion started from x at time t1
+    boost::random::mt19937 &gen)  /// Draws of paths from non-neutral WF
+                                  /// diffusion started from x at time t1
 {
-  assert((x >= 0.0) && (x <= 1.0) && (t1 >= 0.0) && (t2 > 0.0) && (t1 < t2));
+  assert((x >= 0.0) && (x <= 1.0) && (t1 < t2));
   bool accept = false;
   vector<double100> paras{phiMin, phiMax, phiMax - phiMin};
   vector<vector<double100>> ptr;
-  double100 kapmean = paras[2] * (t2 - t1); /// Rate of Poisson point process
+  double100 kapmean = paras[2] * (t2 - t1);  /// Rate of Poisson point process
 
   boost::random::poisson_distribution<int> kap(static_cast<double>(kapmean));
 
   boost::random::uniform_01<double100> unift, unifm,
-      unifU; /// Set up uniform generators for points over [t1,t2] *
-             /// [0,phiMax-phiMin] * [0,1]
+      unifU;  /// Set up uniform generators for points over [t1,t2] *
+  /// [0,phiMax-phiMin] * [0,1]
   int rcount = 0;
-  while (!accept) /// Until all skeleton points get accepted, keep going
+  while (!accept)  /// Until all skeleton points get accepted, keep going
   {
-    int kappa = kap(gen); /// Generate kappa ~ Pois
+    int kappa = kap(gen);  /// Generate kappa ~ Pois
     double100 u = unifU(gen);
+    double100 small_offset = 1.0e-14;
 
     vector<double100> path, times(kappa), marks(kappa), rejcount;
-    auto gent = [&t1, &t2, &unift, &gen]() /// time stamps ~ Unif [t1,t2]
-    { return (t1 + ((t2 - t1) * unift(gen))); };
-    auto genm = [&paras, &unifm, &gen]() /// marks ~ Unif [0,phiMax-phiMin]
+    auto gent = [&t1, &t2, &unift, &small_offset,
+                 &gen]()  /// time stamps ~ Unif [t1,t2]
+    { return (t1 + small_offset + ((t2 - t1) * unift(gen))); };
+    auto genm = [&paras, &unifm, &gen]()  /// marks ~ Unif [0,phiMax-phiMin]
     { return (paras[2] * unifm(gen)); };
-    generate(begin(times), end(times), gent);
-    generate(begin(marks), end(marks), genm);
+    std::generate(begin(times), end(times), gent);
+    std::generate(begin(marks), end(marks), genm);
     sortVectorsAscending(times, times,
-                         marks); /// Sort vectors according to timestamps
+                         marks);  /// Sort vectors according to timestamps
 
     times.push_back(t2);
     marks.push_back(
-        u); /// Add on end point - to be checked differently to skeleton points
+        u);  /// Add on end point - to be checked differently to skeleton points
 
     for (vector<double100>::iterator itt = times.begin(), itm = marks.begin();
          itt != times.end(); itt++, itm++) {
-      if (kappa == 0) /// No skeleton points -> check end point directly
+      if (kappa == 0)  /// No skeleton points -> check end point directly
       {
         if (Absorption) {
           path.push_back(DrawUnconditionedDiffusion(x, t2 - t1, o, gen)
-                             .first); /// Generate endpoint
+                             .first);  /// Generate endpoint
         } else {
           path.push_back(
-              DrawEndpoint(x, t1, t2, o, gen).first); /// Generate endpoint
+              DrawEndpoint(x, t1, t2, o, gen).first);  /// Generate endpoint
         }
 
         if (exp(Atilde(path.back()) - Atildeplus()) <
-            *itm) /// Test if generated point is good; if not generate new
-                  /// Poisson point process
+            *itm)  /// Test if generated point is good; if not generate new
+                   /// Poisson point process
         {
           rcount++;
           break;
@@ -3677,29 +3733,29 @@ vector<vector<double100>> WrightFisher::NonNeutralDraw(
         ptr.push_back(times);
         ptr.push_back(rejcount);
         accept = true;
-      } else /// kappa > 0 - generate skeleton points and endpoint
+      } else  /// kappa > 0 - generate skeleton points and endpoint
       {
         if (itt == times.begin()) {
           if (Absorption) {
             path.push_back(
                 DrawUnconditionedDiffusion(x, (*itt) - t1, o, gen)
-                    .first); /// Generate skeleton points sequentially
+                    .first);  /// Generate skeleton points sequentially
           } else {
             path.push_back(
                 DrawEndpoint(x, t1, *itt, o, gen)
-                    .first); /// Generate skeleton points sequentially
+                    .first);  /// Generate skeleton points sequentially
           }
 
           if (Phitilde(path.back()) - paras[0] >
-              *itm) /// Test generated point is OK, otherwise can stop and
-                    /// generate a new Poisson point process
+              *itm)  /// Test generated point is OK, otherwise can stop and
+                     /// generate a new Poisson point process
           {
             rcount++;
             break;
           }
 
-        } else if (*itt != t2) /// Separate first time stamp and rest to ensure
-                               /// correct sequential sampling
+        } else if (*itt != t2)  /// Separate first time stamp and rest to ensure
+                                /// correct sequential sampling
         {
           if (Absorption) {
             path.push_back(DrawUnconditionedDiffusion(
@@ -3715,7 +3771,7 @@ vector<vector<double100>> WrightFisher::NonNeutralDraw(
             break;
           }
 
-        } else /// Endpoint draw
+        } else  /// Endpoint draw
         {
           if (Absorption) {
             path.push_back(DrawUnconditionedDiffusion(
@@ -3727,7 +3783,7 @@ vector<vector<double100>> WrightFisher::NonNeutralDraw(
           }
 
           if (exp(Atilde(path.back()) - Atildeplus()) <
-              *itm) /// Check corresponding endpoint condition
+              *itm)  /// Check corresponding endpoint condition
           {
             rcount++;
             break;
@@ -3749,8 +3805,8 @@ vector<vector<double100>> WrightFisher::NonNeutralDraw(
 pair<double100, int> WrightFisher::NonNeutralDrawEndpoint(
     double100 x, double100 t1, double100 t2, bool Absorption, const Options &o,
     boost::random::mt19937
-        &gen) /// Invoke NonNeutralDraw to generate a whole path, but retains
-              /// only the endpoint at time t2
+        &gen)  /// Invoke NonNeutralDraw to generate a whole path, but retains
+               /// only the endpoint at time t2
 {
   vector<vector<double100>> ptr = NonNeutralDraw(x, t1, t2, Absorption, o, gen);
   return make_pair(ptr[0].back(), -1);
@@ -3761,9 +3817,9 @@ pair<double100, int> WrightFisher::NonNeutralDrawEndpoint(
 vector<int> WrightFisher::DrawBridgePMFUnconditional(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting within (0,1), ending
-              /// at some boundary point (absorption can happen at any time)
-              /// with time increments being large enough
+        &gen)  /// Draws from the law of a bridge starting within (0,1), ending
+               /// at some boundary point (absorption can happen at any time)
+               /// with time increments being large enough
 {
   assert((x > 0.0) && (x < 1.0) && (!(z > 0.0) || !(z < 1.0)) && (s > 0.0) &&
          (t > 0.0));
@@ -3799,8 +3855,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
 
   while (!mkl_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
@@ -3860,7 +3915,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
       }
 
       if (eAU[n] == eAL[n] && eBU[n] == eBL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkl
@@ -3892,14 +3947,11 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -3939,7 +3991,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
         exit(1);
       }
 
-      while (!decision_on_mkl_made) /// Refine upper and lower bounds
+      while (!decision_on_mkl_made)  /// Refine upper and lower bounds
       {
         double100 currsumLold = currsumL, currsumUold = currsumU;
         currsumL = 0.0;
@@ -4040,16 +4092,18 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
         }
 
         if (currsumLold > currsumL) {
-          cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-               << " = currsumL (n,m,k,l) = (" << n << "," << m << "," << k
-               << "," << l << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumLold = " << currsumLold << " > "
+                    << currsumL << " = currsumL (n,m,k,l) = (" << n << "," << m
+                    << "," << k << "," << l << ")." << endl;
+          // exit(1);
         }
         if (currsumUold < currsumU) {
-          cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-               << " = currsumU (n,m,k,l) = (" << n << "," << m << "," << k
-               << "," << l << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+          std::cout << "Error: currsumUold = " << currsumUold << " < "
+                    << currsumU << " = currsumU (n,m,k,l) = (" << n << "," << m
+                    << "," << k << "," << l << ")." << endl;
+          // exit(1);
         }
 
         decision_on_mkl_made = (currsumL > u || currsumU < u);
@@ -4059,10 +4113,10 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
 
       if (mkl_found) {
         if (!(z > 0.0)) {
-          curr_mk[n][2] = l; /// Sets j = 0
+          curr_mk[n][2] = l;  /// Sets j = 0
           curr_mk[n][3] = 0;
         } else {
-          curr_mk[n][2] = l; /// Sets j = k
+          curr_mk[n][2] = l;  /// Sets j = k
           curr_mk[n][3] = k;
         }
       }
@@ -4070,8 +4124,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -4079,11 +4132,9 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
     cerr << "p_m,k,j: Returned (m,k,j) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << "," << curr_mk[n][3] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -4093,14 +4144,14 @@ vector<int> WrightFisher::DrawBridgePMFUnconditional(
 vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting within (0,1), ending
-              /// at some boundary point (absorption can happen at any time)
-              /// with one time increment falling below the threshold
+        &gen)  /// Draws from the law of a bridge starting within (0,1), ending
+               /// at some boundary point (absorption can happen at any time)
+               /// with one time increment falling below the threshold
 {
   assert((x > 0.0) && (x < 1.0) && (!(z > 0.0) || !(z < 1.0)) && (t > s) &&
          (s > 0.0));
   bool ind1 =
-      (s > o.g1984threshold); /// Figure out whether to approximate q_m or q_k
+      (s > o.g1984threshold);  /// Figure out whether to approximate q_m or q_k
   double100 sorts = (ind1 ? s : t - s), sortsapprox = (sorts == s ? t - s : s);
 
   vector<vector<int>> curr_mk;
@@ -4145,14 +4196,12 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
 
   while (!mkl_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
     int mork = (ind1 ? m : k), morkapprox = (mork == m ? k : m);
-    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL)
-      counter++;
+    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL) counter++;
     if (o.debug > 2)
       cerr << "New n = " << n << ", (m,k) = (" << m << ", " << k << ")" << endl;
 
@@ -4197,7 +4246,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
       }
 
       if (eAU[n] == eAL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkl
@@ -4228,14 +4277,11 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -4283,7 +4329,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
         exit(1);
       }
 
-      while (!decision_on_mkl_made) /// Refine upper and lower bounds
+      while (!decision_on_mkl_made)  /// Refine upper and lower bounds
       {
         double100 currsumLold = currsumL, currsumUold = currsumU;
         currsumL = 0.0;
@@ -4373,16 +4419,18 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
         }
 
         if (currsumLold > currsumL) {
-          cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-               << " = currsumL (n,m,k,l) = (" << n << "," << m << "," << k
-               << "," << l << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumLold = " << currsumLold << " > "
+                    << currsumL << " = currsumL (n,m,k,l) = (" << n << "," << m
+                    << "," << k << "," << l << ")." << endl;
+          // exit(1);
         }
         if (currsumUold < currsumU) {
-          cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-               << " = currsumU (n,m,k,l) = (" << n << "," << m << "," << k
-               << "," << l << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+          std::cout << "Error: currsumUold = " << currsumUold << " < "
+                    << currsumU << " = currsumU (n,m,k,l) = (" << n << "," << m
+                    << "," << k << "," << l << ")." << endl;
+          // exit(1);
         }
 
         decision_on_mkl_made = (currsumL > u || currsumU < u);
@@ -4392,18 +4440,18 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
 
       if (mkl_found) {
         if (!(z > 0.0)) {
-          curr_mk[n][2] = l; /// Sets j = 0
+          curr_mk[n][2] = l;  /// Sets j = 0
           curr_mk[n][3] = 0;
         } else {
-          curr_mk[n][2] = l; /// Sets j = k
+          curr_mk[n][2] = l;  /// Sets j = k
           curr_mk[n][3] = k;
         }
       }
     }
 
     if (counter ==
-        totalpts) /// Gaussian approximation leads to currsum summing to < 1.0,
-                  /// so we renormalise and sample from the computed quantities
+        totalpts)  /// Gaussian approximation leads to currsum summing to < 1.0,
+                   /// so we renormalise and sample from the computed quantities
     {
       LogSumExp(currsumStore, runningMax);
       double100 sum = 0.0;
@@ -4434,19 +4482,16 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
   if (o.debug > 2) {
     cerr << "p_m,k,j: Returned (m,k,j) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << "," << curr_mk[n][3] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -4456,9 +4501,9 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalOneQApprox(
 vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting within (0,1), ending
-              /// at some boundary point (absorption can happen at any time)
-              /// with both time increments falling below the threshold
+        &gen)  /// Draws from the law of a bridge starting within (0,1), ending
+               /// at some boundary point (absorption can happen at any time)
+               /// with both time increments falling below the threshold
 {
   assert((x > 0.0) && (x < 1.0) && (!(z > 0.0) || !(z < 1.0)) && (t > s) &&
          (s > 0.0));
@@ -4471,7 +4516,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
   int Dflip = 1, Djm = 0, Djp = 0, mkLower = (thetaP.empty() ? 1 : 0);
   int dmode = static_cast<int>(ceil(GriffithsParas(t).first)), d = dmode;
 
-  while (max(eCOldInc, eCInc) > 0.0) {
+  while (max(eCOldInc, eCInc) > 0.0 || (!(eC > 0.0))) {
     eCOldInc = eCInc;
     double100 xcont = (!(z > 0.0) ? static_cast<double100>(d) * log(1.0 - x)
                                   : static_cast<double100>(d) * log(x));
@@ -4480,7 +4525,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
     eC += eCInc;
 
     if (Dflip == -1 &&
-        (dmode - Djm - 1 > 0)) /// Mechanism to explore either side around mode
+        (dmode - Djm - 1 > 0))  /// Mechanism to explore either side around mode
     {
       Djm++;
       d = dmode - Djm;
@@ -4492,12 +4537,12 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
   }
 
   vector<int> modeGuess = mklModeFinder(
-      x, z, s, t, o); /// Get a guess to location of mode over (m,k,l)
+      x, z, s, t, o);  /// Get a guess to location of mode over (m,k,l)
   int mMode = modeGuess[0], kMode = modeGuess[1], lMode = modeGuess[2];
 
   boost::random::uniform_01<double100>
-      U01; /// Use these guesses & eC to set a suitable threshold for subsequent
-           /// computations
+      U01;  /// Use these guesses & eC to set a suitable threshold for
+  /// subsequent computations
   double100 currsum = 0.0, u = U01(gen),
             threshold = exp(mklModeFinder_Evaluator(mMode, kMode, lMode, x, z,
                                                     s, t, o) -
@@ -4508,12 +4553,12 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
   bool mSwitch = false, mDownSwitch = false, mUpSwitch = false;
   double100 mContr_D = boost::math::lgamma(static_cast<double100>(theta + m));
   double100 mContr_U = mContr_D, mContr,
-            runningMax = -1.0e100; /// Computing m contributions
+            runningMax = -1.0e100;  /// Computing m contributions
 
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
-    if (!(qm > 0.0)) /// This should not trigger, but if it does, sets to very
-                     /// small value (taking logs later so cannot be 0!)
+    if (!(qm > 0.0))  /// This should not trigger, but if it does, sets to very
+                      /// small value (taking logs later so cannot be 0!)
     {
       qm = 1.0e-300;
     }
@@ -4532,15 +4577,15 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
     int k = kMode, j = (!(z > 0.0) ? 0 : k);
     kFlip = 1, kD = 0, kU = 0;
     bool kSwitch = false, kDownSwitch = false,
-         kUpSwitch = false; /// Computing k contributions
+         kUpSwitch = false;  /// Computing k contributions
     double100 kContr_D =
                   -boost::math::lgamma(static_cast<double100>(theta + m + k)),
               kContr_U = kContr_D, kContr;
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
-      if (!(qk > 0.0)) /// This should not trigger, but if it does, sets to very
-                       /// small value (taking logs later so cannot be 0!)
+      if (!(qk > 0.0))  /// This should not trigger, but if it does, sets to
+                        /// very small value (taking logs later so cannot be 0!)
       {
         qk = 1.0e-300;
       }
@@ -4557,7 +4602,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
       }
 
       int lFlip = 1, newlMode = min(m, lMode), l = newlMode, lU = 0,
-          lD = 0; /// Need to redefine lMode as m might be too small!
+          lD = 0;  /// Need to redefine lMode as m might be too small!
       int lLower = ((thetaP.empty() && !(z < 1.0)) ? 1 : 0),
           lUpper = ((thetaP.empty() && !(z > 0.0)) ? m : m - 1);
       bool lSwitch = false, lDownSwitch = false, lUpSwitch = false;
@@ -4605,8 +4650,8 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
         }
         double100 currsum_inc = mContr + kContr + lContr - log(eC);
         runningMax =
-            max(currsum_inc, runningMax); /// Running max of log probabilities
-                                          /// for use in log-sum-exp trick
+            max(currsum_inc, runningMax);  /// Running max of log probabilities
+        /// for use in log-sum-exp trick
         currsum += exp(currsum_inc);
         currsumStore.push_back(currsum_inc);
 
@@ -4616,7 +4661,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
         mkljStore[2 + (4 * (currsumStore.size() - 1))] = l;
         mkljStore[3 + (4 * (currsumStore.size() - 1))] = j;
 
-        if (!(lDownSwitch)) /// Switching mechanism for l
+        if (!(lDownSwitch))  /// Switching mechanism for l
         {
           if (sgn(l - newlMode) <= 0) {
             lDownSwitch = ((exp(currsum_inc) < threshold) ||
@@ -4648,7 +4693,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
         }
       }
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch =
@@ -4677,7 +4722,7 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < mkLower));
@@ -4743,8 +4788,8 @@ vector<int> WrightFisher::DrawBridgePMFUnconditionalApprox(
 vector<int> WrightFisher::DrawBridgePMFSameMutation(
     double100 x, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending at the same
-              /// boundary point and time increments are large enough
+        &gen)  /// Draws from the law of a bridge starting and ending at the
+               /// same boundary point and time increments are large enough
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
   vector<vector<int>> curr_mk;
@@ -4779,8 +4824,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
 
   while (!mk_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
@@ -4840,7 +4884,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
       }
 
       if (eAU[n] == eAL[n] && eBU[n] == eBL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkj
@@ -4863,7 +4907,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
       }
     }
 
-    double100 addon; /// Compute the appropriate additional terms
+    double100 addon;  /// Compute the appropriate additional terms
 
     if ((thetaP[0] > 0.0 && thetaP[1] > 0.0) && !(x > 0.0)) {
       addon = log(boost::math::beta<double100>(thetaP[0], thetaP[1] + m + k)) -
@@ -4888,14 +4932,11 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -4911,7 +4952,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
       exit(1);
     }
 
-    while (!decision_on_mk_made) /// Need to refine upper and lower bounds
+    while (!decision_on_mk_made)  /// Need to refine upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -5014,16 +5055,18 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
 
       decision_on_mk_made = (currsumL > u || currsumU < u);
@@ -5033,17 +5076,16 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
   }
 
   if (!(x > 0.0)) {
-    curr_mk[n][2] = 0; /// Setting l & j to be 0
+    curr_mk[n][2] = 0;  /// Setting l & j to be 0
     curr_mk[n][3] = 0;
   } else {
-    curr_mk[n][2] = curr_mk[n][0]; /// Setting l & j to be m & k respectively
+    curr_mk[n][2] = curr_mk[n][0];  /// Setting l & j to be m & k respectively
     curr_mk[n][3] = curr_mk[n][1];
   }
 
   int coeffcount = 0;
 
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -5051,11 +5093,9 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
     cerr << "p_m,k,l,j: Returned (m,k) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -5065,13 +5105,13 @@ vector<int> WrightFisher::DrawBridgePMFSameMutation(
 vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
     double100 x, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending at the same
-              /// boundary point, but one of the time increments falls below
-              /// threshold
+        &gen)  /// Draws from the law of a bridge starting and ending at the
+               /// same boundary point, but one of the time increments falls
+               /// below threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
   bool ind1 =
-      (s > o.g1984threshold); /// Figure out whether to approximate q_m or q_k
+      (s > o.g1984threshold);  /// Figure out whether to approximate q_m or q_k
   double100 sorts = (ind1 ? s : t - s), sortsapprox = (sorts == s ? t - s : s);
 
   vector<vector<int>> curr_mk;
@@ -5120,15 +5160,14 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
 
   while (!mk_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
     int mork = (ind1 ? m : k), morkapprox = (mork == m ? k : m);
     if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL)
-      counter++; /// Keep track of the points we have visited inside the
-                 /// specified (m,k)-square
+      counter++;  /// Keep track of the points we have visited inside the
+    /// specified (m,k)-square
     if (o.debug > 2)
       cerr << "New n = " << n << ", (m,k) = (" << m << ", " << k << ")" << endl;
 
@@ -5173,7 +5212,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
       }
 
       if (eAU[n] == eAL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkj
@@ -5196,7 +5235,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
       }
     }
 
-    double100 addon; /// Computing the appropriate additional contributions
+    double100 addon;  /// Computing the appropriate additional contributions
 
     if ((thetaP[0] > 0.0 && thetaP[1] > 0.0) && !(x > 0.0)) {
       addon = log(boost::math::beta<double100>(thetaP[0], thetaP[1] + m + k)) -
@@ -5220,14 +5259,11 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -5242,8 +5278,8 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
     mkljStore[2 + (4 * (currsumStore.size() - 1))] = (!(x > 0.0) ? 0 : m);
     mkljStore[3 + (4 * (currsumStore.size() - 1))] = (!(x > 0.0) ? 0 : k);
 
-    if (counter == totalpts) /// Gaussian approximation leads to currsum summing
-                             /// to < 1.0, so we renormalise and sample
+    if (counter == totalpts)  /// Gaussian approximation leads to currsum
+                              /// summing to < 1.0, so we renormalise and sample
     {
       LogSumExp(currsumStore, runningMax);
       double100 sum = 0.0;
@@ -5281,7 +5317,7 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
       exit(1);
     }
 
-    while (!decision_on_mk_made) /// Need to refine the upper and lower bounds
+    while (!decision_on_mk_made)  /// Need to refine the upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -5374,16 +5410,18 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
 
       decision_on_mk_made = (currsumL > u || currsumU < u);
@@ -5393,17 +5431,16 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
   }
 
   if (!(x > 0.0)) {
-    curr_mk[n][2] = 0; /// Setting l & j to be 0
+    curr_mk[n][2] = 0;  /// Setting l & j to be 0
     curr_mk[n][3] = 0;
   } else {
-    curr_mk[n][2] = curr_mk[n][0]; /// Setting l & j to be m & k respectively
+    curr_mk[n][2] = curr_mk[n][0];  /// Setting l & j to be m & k respectively
     curr_mk[n][3] = curr_mk[n][1];
   }
 
   int coeffcount = 0;
 
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -5411,11 +5448,9 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
     cerr << "p_m,k,l,j: Returned (m,k) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -5424,8 +5459,8 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationOneQApprox(
 
 vector<int> WrightFisher::DrawBridgePMFSameMutationApprox(
     double100 x, double100 s, double100 t,
-    boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending at the same
+    boost::random::mt19937 &
+        gen)  /// Draws from the law of a bridge starting and ending at the same
               /// boundary point, but both time increments fall below threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
@@ -5449,9 +5484,9 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationApprox(
   while (!accept) {
     m = DrawSizebiasedAncestralProcess(2, s, gen),
     k = DrawSizebiasedAncestralProcess(
-        2, t - s, gen); /// Draw (m,k) from a size-biased Ancestral Process
+        2, t - s, gen);  /// Draw (m,k) from a size-biased Ancestral Process
     boost::random::uniform_01<>
-        U01; /// Compute alpha and run an accept/reject step
+        U01;  /// Compute alpha and run an accept/reject step
     double u = U01(gen),
            alpha =
                boost::math::lgamma(static_cast<double100>(thetaP[1] + m + k)) +
@@ -5473,10 +5508,10 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationApprox(
   returnvec.push_back(k);
 
   if (!(x > 0.0)) {
-    returnvec.push_back(0); /// Setting l & j to be m & k respectively
+    returnvec.push_back(0);  /// Setting l & j to be m & k respectively
     returnvec.push_back(0);
   } else {
-    returnvec.push_back(m); /// Setting l & j to be m & k respectively
+    returnvec.push_back(m);  /// Setting l & j to be m & k respectively
     returnvec.push_back(k);
   }
 
@@ -5485,8 +5520,8 @@ vector<int> WrightFisher::DrawBridgePMFSameMutationApprox(
 
 vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
     double100 s, double100 t, double100 x, const Options &o,
-    boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending at
+    boost::random::mt19937 &
+        gen)  /// Draws from the law of a bridge starting and ending at
               /// different boundary points and time increments are large enough
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
@@ -5518,8 +5553,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
 
   while (!mk_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
@@ -5578,7 +5612,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
           exp(Getlogakm<double100>(denomqindex + 2 * v, denomqindex) +
               static_cast<double100>(-(denomqindex + 2 * v) *
                                      (denomqindex + 2 * v + theta - 1) * (t) /
-                                     2.0)); // Computing q_2
+                                     2.0));  // Computing q_2
       newcoefficientL =
           exp(Getlogakm<double100>(denomqindex + 2 * v + 1, denomqindex) +
               static_cast<double100>(-(denomqindex + 2 * v + 1) *
@@ -5590,7 +5624,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
 
       if (eAU[n] == eAL[n] && eBU[n] == eBL[n] &&
           eCL[n] ==
-              eCU[n]) /// ...then we have lost precision before reaching Fmk.
+              eCU[n])  /// ...then we have lost precision before reaching Fmk.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmk = " << Fmk
@@ -5637,14 +5671,11 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -5660,7 +5691,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
       exit(1);
     }
 
-    while (!decision_on_mk_made) /// Refine upper and lower bounds
+    while (!decision_on_mk_made)  /// Refine upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -5769,16 +5800,18 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
 
       decision_on_mk_made = (currsumL > u || currsumU < u);
@@ -5788,17 +5821,16 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
   }
 
   if (!(x > 0.0)) {
-    curr_mk[n][2] = 0; /// Setting l & j to be 0 & k respectively
+    curr_mk[n][2] = 0;  /// Setting l & j to be 0 & k respectively
     curr_mk[n][3] = curr_mk[n][1];
   } else {
-    curr_mk[n][2] = curr_mk[n][0]; /// Setting l & j to be m & 0 respectively
+    curr_mk[n][2] = curr_mk[n][0];  /// Setting l & j to be m & 0 respectively
     curr_mk[n][3] = 0;
   }
 
   int coeffcount = 0;
 
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -5806,11 +5838,9 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
     cerr << "p_m,k,l,j: Returned (m,k) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -5820,13 +5850,13 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutation(
 vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
     double100 s, double100 t, double100 x, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending at
-              /// different boundary points, but one of the time increments
-              /// falls below threshold
+        &gen)  /// Draws from the law of a bridge starting and ending at
+               /// different boundary points, but one of the time increments
+               /// falls below threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
   bool ind1 =
-      (s > o.g1984threshold); /// Figure out whether to approximate q_m or q_k
+      (s > o.g1984threshold);  /// Figure out whether to approximate q_m or q_k
   double100 sorts = (ind1 ? s : t - s), sortsapprox = (sorts == s ? t - s : s);
 
   vector<vector<int>> curr_mk;
@@ -5867,14 +5897,12 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
 
   while (!mk_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
     int mork = (ind1 ? m : k), morkapprox = (mork == m ? k : m);
-    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL)
-      counter++;
+    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL) counter++;
     if (o.debug > 2)
       cerr << "New n = " << n << ", (m,k) = (" << m << ", " << k << ")" << endl;
 
@@ -5886,8 +5914,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
     dL.push_back(0.0);
     dU.push_back(0.0);
     int F1 = computeC(mork, Csorts), F3 = computeC(denomqindex, Ct);
-    if (o.debug > 2)
-      cerr << "(F1,F3) = (" << F1 << "," << F3 << ")" << endl;
+    if (o.debug > 2) cerr << "(F1,F3) = (" << F1 << "," << F3 << ")" << endl;
     Fmk = max(max(F1, F3), F4);
 
     int v = -1;
@@ -5916,7 +5943,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
           exp(Getlogakm<double100>(denomqindex + 2 * v, denomqindex) +
               static_cast<double100>(-(denomqindex + 2 * v) *
                                      (denomqindex + 2 * v + theta - 1) * (t) /
-                                     2.0)); // Computing q_2
+                                     2.0));  // Computing q_2
       newcoefficientL =
           exp(Getlogakm<double100>(denomqindex + 2 * v + 1, denomqindex) +
               static_cast<double100>(-(denomqindex + 2 * v + 1) *
@@ -5928,7 +5955,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
 
       if (eAU[n] == eAL[n] &&
           eCL[n] ==
-              eCU[n]) /// ...then we have lost precision before reaching Fmk.
+              eCU[n])  /// ...then we have lost precision before reaching Fmk.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmk = " << Fmk
@@ -5975,14 +6002,11 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -5997,8 +6021,8 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
     mkljStore[2 + (4 * (currsumStore.size() - 1))] = (!(x > 0.0) ? 0 : m);
     mkljStore[3 + (4 * (currsumStore.size() - 1))] = (!(x > 0.0) ? k : 0);
 
-    if (counter == totalpts) /// Gaussian approximation leads to currsum summing
-                             /// to < 1.0, so we renormalise and sample
+    if (counter == totalpts)  /// Gaussian approximation leads to currsum
+                              /// summing to < 1.0, so we renormalise and sample
     {
       LogSumExp(currsumStore, runningMax);
       double100 sum = 0.0;
@@ -6036,7 +6060,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
       exit(1);
     }
 
-    while (!decision_on_mk_made) /// Refine upper and lower bounds
+    while (!decision_on_mk_made)  /// Refine upper and lower bounds
     {
       double100 currsumLold = currsumL, currsumUold = currsumU;
       currsumL = 0.0;
@@ -6135,16 +6159,18 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
       }
 
       if (currsumLold > currsumL) {
-        cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-             << " = currsumL (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+        std::cout << "Error: currsumLold = " << currsumLold << " > " << currsumL
+                  << " = currsumL (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
       if (currsumUold < currsumU) {
-        cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-             << " = currsumU (n,m,k) = (" << n << "," << m << "," << k << ")."
-             << endl;
-        exit(1);
+        // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+        std::cout << "Error: currsumUold = " << currsumUold << " < " << currsumU
+                  << " = currsumU (n,m,k) = (" << n << "," << m << "," << k
+                  << ")." << endl;
+        // exit(1);
       }
 
       decision_on_mk_made = (currsumL > u || currsumU < u);
@@ -6154,17 +6180,16 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
   }
 
   if (!(x > 0.0)) {
-    curr_mk[n][2] = 0; /// Setting l & j to be 0 & k respectively
+    curr_mk[n][2] = 0;  /// Setting l & j to be 0 & k respectively
     curr_mk[n][3] = curr_mk[n][1];
   } else {
-    curr_mk[n][2] = curr_mk[n][0]; /// Setting l & j to be m & 0 respectively
+    curr_mk[n][2] = curr_mk[n][0];  /// Setting l & j to be m & 0 respectively
     curr_mk[n][3] = 0;
   }
 
   int coeffcount = 0;
 
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -6172,11 +6197,9 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
     cerr << "p_m,k,l,j: Returned (m,k) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -6185,9 +6208,10 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationOneQApprox(
 
 vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
     double100 s, double100 t, double100 x, const Options &o,
-    boost::random::mt19937 &
-        gen) /// Draws from the law of a bridge starting and ending at different
-             /// boundary points, but both time increments fall below threshold
+    boost::random::mt19937
+        &gen)  /// Draws from the law of a bridge starting and ending at
+               /// different boundary points, but both time increments fall
+               /// below threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (t > s) && (s > 0.0));
   vector<int> returnvec;
@@ -6203,8 +6227,8 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
   /// Compute a guess to the mode over (m,k)
   vector<int> modeGuess = mkModeFinder(x, 1.0 - x, s, t, o);
   int mMode = modeGuess[0],
-      kMode = modeGuess[1]; /// Use this guess & eC to obtain a suitable
-                            /// threshold for subsequent calculations
+      kMode = modeGuess[1];  /// Use this guess & eC to obtain a suitable
+  /// threshold for subsequent calculations
   double100 constContr = -log(eC) - boost::math::lgamma(thetaP[0]) -
                          boost::math::lgamma(thetaP[1]);
   double100 currsum = 0.0,
@@ -6230,16 +6254,15 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
           constContr;
 
       currsum += exp(currsum_inc);
-      runningMax =
-          max(currsum_inc, runningMax); /// Storing maximum of log probabilities
-                                        /// for log-sum-exp trick
+      runningMax = max(currsum_inc, runningMax);  /// Storing maximum of log
+      /// probabilities for log-sum-exp trick
       currsumStore.push_back(currsum_inc);
 
       mkStore.resize(mkStore.size() + 2, -1);
       mkStore[0 + (2 * (currsumStore.size() - 1))] = m;
       mkStore[1 + (2 * (currsumStore.size() - 1))] = k;
 
-      if (!(kDownSwitch)) /// Mechanism to explore k
+      if (!(kDownSwitch))  /// Mechanism to explore k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch =
@@ -6269,7 +6292,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
       }
     }
 
-    if (!(mDownSwitch)) /// Mechanism to explore m
+    if (!(mDownSwitch))  /// Mechanism to explore m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -6297,8 +6320,8 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
     }
   }
 
-  LogSumExp(currsumStore, runningMax); /// Log-sum-exp trick to normalise vector
-                                       /// of log probabilities
+  LogSumExp(currsumStore, runningMax);  /// Log-sum-exp trick to normalise
+  /// vector of log probabilities
   double100 sum = 0.0;
   int index, ind = 0;
   boost::random::uniform_01<double100> U01;
@@ -6308,7 +6331,7 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
   for (int i = 0; i != static_cast<int>(indexing.size()); i++) {
     indexing[i] = i;
   }
-  sort(indexing.begin(), indexing.end(), /// Sort vector
+  sort(indexing.begin(), indexing.end(),  /// Sort vector
        [&](const int &a, const int &b) {
          return (currsumStore[a] > currsumStore[b]);
        });
@@ -6319,10 +6342,10 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
     sum += currsumStore[indexing[ind]];
     if (sum > u) {
       index =
-          indexing[ind]; /// Figure out what the correct index for mkljStore is
+          indexing[ind];  /// Figure out what the correct index for mkljStore is
       found = true;
     }
-    if (ind == static_cast<int>(currsumStore.size())) /// Ending condition
+    if (ind == static_cast<int>(currsumStore.size()))  /// Ending condition
     {
       index = indexing[ind];
       found = true;
@@ -6330,13 +6353,13 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
     ind++;
   }
 
-  if (!(x > 0.0)) /// Setting l = 0, j = k
+  if (!(x > 0.0))  /// Setting l = 0, j = k
   {
     returnvec.push_back(mkStore[0 + (2 * index)]);
     returnvec.push_back(mkStore[1 + (2 * index)]);
     returnvec.push_back(0);
     returnvec.push_back(mkStore[1 + (2 * index)]);
-  } else /// Setting l = m, j = 0
+  } else  /// Setting l = m, j = 0
   {
     returnvec.push_back(mkStore[0 + (2 * index)]);
     returnvec.push_back(mkStore[1 + (2 * index)]);
@@ -6350,9 +6373,9 @@ vector<int> WrightFisher::DrawBridgePMFDifferentMutationApprox(
 vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting at a boundary point
-              /// but ending in the interior of (0,1) with both time increments
-              /// large enough
+        &gen)  /// Draws from the law of a bridge starting at a boundary point
+               /// but ending in the interior of (0,1) with both time increments
+               /// large enough
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
@@ -6393,8 +6416,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
 
   while (!mkj_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
@@ -6454,7 +6476,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
       }
 
       if (eAU[n] == eAL[n] && eBU[n] == eBL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkj
@@ -6486,14 +6508,11 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -6529,7 +6548,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
         exit(1);
       }
 
-      while (!decision_on_mkj_made) /// Refine upper and lower bounds
+      while (!decision_on_mkj_made)  /// Refine upper and lower bounds
       {
         double100 currsumLold = currsumL, currsumUold = currsumU;
         currsumL = 0.0;
@@ -6623,16 +6642,18 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
         }
 
         if (currsumLold > currsumL) {
-          cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-               << " = currsumL (n,m,k,j) = (" << n << "," << m << "," << k
-               << "," << j << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumLold = " << currsumLold << " > "
+                    << currsumL << " = currsumL (n,m,k,j) = (" << n << "," << m
+                    << "," << k << "," << j << ")." << endl;
+          // exit(1);
         }
         if (currsumUold < currsumU) {
-          cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-               << " = currsumU (n,m,k,j) = (" << n << "," << m << "," << k
-               << "," << j << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+          std::cout << "Error: currsumUold = " << currsumUold << " < "
+                    << currsumU << " = currsumU (n,m,k,j) = (" << n << "," << m
+                    << "," << k << "," << j << ")." << endl;
+          // exit(1);
         }
 
         decision_on_mkj_made = (currsumL > u || currsumU < u);
@@ -6642,10 +6663,10 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
 
       if (mkj_found) {
         if (!(x > 0.0)) {
-          curr_mk[n][2] = 0; /// Sets l = 0
+          curr_mk[n][2] = 0;  /// Sets l = 0
           curr_mk[n][3] = j;
         } else {
-          curr_mk[n][2] = m; /// Sets l = m
+          curr_mk[n][2] = m;  /// Sets l = m
           curr_mk[n][3] = j;
         }
       }
@@ -6653,8 +6674,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -6662,11 +6682,9 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
     cerr << "p_m,k,j: Returned (m,k,j) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << "," << curr_mk[n][3] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -6676,14 +6694,14 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutation(
 vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting at a boundary point
-              /// but ending in the interior of (0,1) but one time increment is
-              /// below the threshold
+        &gen)  /// Draws from the law of a bridge starting at a boundary point
+               /// but ending in the interior of (0,1) but one time increment is
+               /// below the threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
   bool ind1 =
-      (s > o.g1984threshold); /// Figure out whether to approximate q_m or q_k
+      (s > o.g1984threshold);  /// Figure out whether to approximate q_m or q_k
   double100 sorts = (ind1 ? s : t - s), sortsapprox = (sorts == s ? t - s : s);
 
   vector<vector<int>> curr_mk;
@@ -6727,14 +6745,12 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
 
   while (!mkj_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
     int mork = (ind1 ? m : k), morkapprox = (mork == m ? k : m);
-    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL)
-      counter++;
+    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL) counter++;
     if (o.debug > 2)
       cerr << "New n = " << n << ", (m,k) = (" << m << ", " << k << ")" << endl;
 
@@ -6779,7 +6795,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
       }
 
       if (eAU[n] == eAL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmkj.
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmkj.
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmkj = " << Fmkj
@@ -6810,14 +6826,11 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -6861,7 +6874,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
         exit(1);
       }
 
-      while (!decision_on_mkj_made) /// Refine upper and lower bounds
+      while (!decision_on_mkj_made)  /// Refine upper and lower bounds
       {
         double100 currsumLold = currsumL, currsumUold = currsumU;
         currsumL = 0.0;
@@ -6942,16 +6955,18 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
         }
 
         if (currsumLold > currsumL) {
-          cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-               << " = currsumL (n,m,k,l,j) = (" << n << "," << m << "," << k
-               << "," << j << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
+          std::cout << "Error: currsumLold = " << currsumLold << " > "
+                    << currsumL << " = currsumL (n,m,k,l,j) = (" << n << ","
+                    << m << "," << k << "," << j << ")." << endl;
+          // exit(1);
         }
         if (currsumUold < currsumU) {
-          cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-               << " = currsumU (n,m,k,l,j) = (" << n << "," << m << "," << k
-               << "," << j << ")." << endl;
-          exit(1);
+          // cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
+          std::cout << "Error: currsumUold = " << currsumUold << " < "
+                    << currsumU << " = currsumU (n,m,k,l,j) = (" << n << ","
+                    << m << "," << k << "," << j << ")." << endl;
+          // exit(1);
         }
 
         decision_on_mkj_made = (currsumL > u || currsumU < u);
@@ -6961,17 +6976,17 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
 
       if (mkj_found) {
         if (!(x > 0.0)) {
-          curr_mk[n][2] = 0; /// Sets l = 0
+          curr_mk[n][2] = 0;  /// Sets l = 0
           curr_mk[n][3] = j;
         } else {
-          curr_mk[n][2] = m; /// Sets l = m
+          curr_mk[n][2] = m;  /// Sets l = m
           curr_mk[n][3] = j;
         }
       }
     }
 
-    if (counter == totalpts) /// Gaussian approximation leads to currsum summing
-                             /// to < 1.0, so we renormalise and sample
+    if (counter == totalpts)  /// Gaussian approximation leads to currsum
+                              /// summing to < 1.0, so we renormalise and sample
     {
       LogSumExp(currsumStore, runningMax);
       double100 sum = 0.0;
@@ -7002,19 +7017,16 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
   if (o.debug > 2) {
     cerr << "p_m,k,j: Returned (m,k,j) = (" << curr_mk[n][0] << ","
          << curr_mk[n][1] << "," << curr_mk[n][3] << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -7024,9 +7036,9 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationOneQApprox(
 vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting at a boundary point
-              /// but ending in the interior of (0,1) with both time increments
-              /// below the threshold
+        &gen)  /// Draws from the law of a bridge starting at a boundary point
+               /// but ending in the interior of (0,1) with both time increments
+               /// below the threshold
 {
   assert((!(x > 0.0) || !(x < 1.0)) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
@@ -7039,7 +7051,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
   int Dflip = 1, Djm = 0, Djp = 0;
   int dmode = static_cast<int>(ceil(GriffithsParas(t).first)), d = dmode;
 
-  while (max(eCOldInc, eCInc) > 0.0) {
+  while (max(eCOldInc, eCInc) > 0.0 || (!(eC > 0.0))) {
     eCOldInc = eCInc;
     double100 para1 = (!(x > 0.0) ? static_cast<double100>(thetaP[0])
                                   : static_cast<double100>(thetaP[0] + d));
@@ -7055,7 +7067,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
     eC += eCInc;
 
     if (Dflip == -1 &&
-        (dmode - Djm - 1 > 0)) /// Mechanism to explore either side around mode
+        (dmode - Djm - 1 > 0))  /// Mechanism to explore either side around mode
     {
       Djm++;
       d = dmode - Djm;
@@ -7067,12 +7079,12 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
   }
 
   vector<int> modeGuess = mkjModeFinder(
-      x, z, s, t, o); /// Get a guess to location of mode over (m,k,j)
+      x, z, s, t, o);  /// Get a guess to location of mode over (m,k,j)
   int mMode = modeGuess[0], kMode = modeGuess[1], jMode = modeGuess[2];
 
   boost::random::uniform_01<double100>
-      U01; /// Use these guesses & eC to set a suitable threshold for subsequent
-           /// computations
+      U01;  /// Use these guesses & eC to set a suitable threshold for
+  /// subsequent computations
   double100 currsum = 0.0, u = U01(gen),
             threshold = exp(mkjModeFinder_Evaluator(mMode, kMode, jMode, x, z,
                                                     s, t, o) -
@@ -7092,12 +7104,12 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
            ? -boost::math::lgamma(static_cast<double100>(thetaP[1] + m))
            : -boost::math::lgamma(static_cast<double100>(thetaP[0] + m)));
   double100 mContr_U = mContr_D, mContr,
-            runningMax = -1.0e100; /// Computing m contributions
+            runningMax = -1.0e100;  /// Computing m contributions
 
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
-    if (!(qm > 0.0)) /// This should not trigger, but if it does, sets to very
-                     /// small value (taking logs later so cannot be 0!)
+    if (!(qm > 0.0))  /// This should not trigger, but if it does, sets to very
+                      /// small value (taking logs later so cannot be 0!)
     {
       qm = 1.0e-300;
     }
@@ -7123,7 +7135,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
     int k = kMode;
     kFlip = 1, kD = 0, kU = 0;
     bool kSwitch = false, kDownSwitch = false,
-         kUpSwitch = false; /// Computing k contributions
+         kUpSwitch = false;  /// Computing k contributions
     double100 kContr_D =
                   (boost::math::lgamma(
                        static_cast<double100>(thetaP[0] + thetaP[1] + k)) -
@@ -7134,8 +7146,8 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
-      if (!(qk > 0.0)) /// This should not trigger, but if it does, sets to very
-                       /// small value (taking logs later so cannot be 0!)
+      if (!(qk > 0.0))  /// This should not trigger, but if it does, sets to
+                        /// very small value (taking logs later so cannot be 0!)
       {
         qk = 1.0e-300;
       }
@@ -7159,11 +7171,11 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
       }
 
       int jFlip = 1, newjMode = min(k, jMode), j = newjMode, jU = 0,
-          jD = 0; /// Need to redefine jMode as k might be too small!
+          jD = 0;  /// Need to redefine jMode as k might be too small!
       bool jSwitch = false, jDownSwitch = false, jUpSwitch = false;
 
       double100 jContr_D =
-          log(boost::math::binomial_coefficient<double100>(k, j)) +
+          LogBinomialCoefficientCalculator(k, j) +
           (!(x > 0.0) ? boost::math::lgamma(
                             static_cast<double100>(thetaP[1] + m + k - j)) -
                             boost::math::lgamma(
@@ -7210,8 +7222,8 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
         }
         double100 currsum_inc = constContr + mContr + kContr + jContr - log(eC);
         runningMax =
-            max(currsum_inc, runningMax); /// Running max of log probabilities
-                                          /// for use in log-sum-exp trick
+            max(currsum_inc, runningMax);  /// Running max of log probabilities
+        /// for use in log-sum-exp trick
         currsum += exp(currsum_inc);
         currsumStore.push_back(currsum_inc);
 
@@ -7221,7 +7233,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
         mkljStore[2 + (4 * (currsumStore.size() - 1))] = l;
         mkljStore[3 + (4 * (currsumStore.size() - 1))] = j;
 
-        if (!(jDownSwitch)) /// Switching mechanism for j
+        if (!(jDownSwitch))  /// Switching mechanism for j
         {
           if (sgn(j - newjMode) <= 0) {
             jDownSwitch =
@@ -7253,7 +7265,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
         }
       }
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = (((jU == 0) && (jD == 0)) || (kMode - kD - 1 < 0));
@@ -7281,7 +7293,7 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -7347,8 +7359,8 @@ vector<int> WrightFisher::DrawBridgePMFInteriorMutationApprox(
 vector<int> WrightFisher::DrawBridgePMF(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
     boost::random::mt19937
-        &gen) /// Draws from the law of a bridge starting and ending in the
-              /// interior of (0,1) with both time increments large enough
+        &gen)  /// Draws from the law of a bridge starting and ending in the
+               /// interior of (0,1) with both time increments large enough
 {
   assert((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
@@ -7398,8 +7410,7 @@ vector<int> WrightFisher::DrawBridgePMF(
 
   while (!mklj_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
@@ -7459,7 +7470,7 @@ vector<int> WrightFisher::DrawBridgePMF(
       }
 
       if (eAU[n] == eAL[n] && eBU[n] == eBL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmklj
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmklj
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmklj = " << Fmklj
@@ -7492,14 +7503,11 @@ vector<int> WrightFisher::DrawBridgePMF(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -7534,7 +7542,7 @@ vector<int> WrightFisher::DrawBridgePMF(
           exit(1);
         }
 
-        while (!decision_on_mklj_made) /// Refine upper and lower bounds
+        while (!decision_on_mklj_made)  /// Refine upper and lower bounds
         {
           double100 currsumLold = currsumL, currsumUold = currsumU;
           currsumL = 0.0;
@@ -7631,16 +7639,20 @@ vector<int> WrightFisher::DrawBridgePMF(
           }
 
           if (currsumLold > currsumL) {
-            cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-                 << " = currsumL (n,m,k,l,j) = (" << n << "," << m << "," << k
-                 << "," << l << "," << j << ")." << endl;
-            exit(1);
+            // cerr << "Error: currsumLold = " << currsumLold << " > " <<
+            // currsumL
+            std::cout << "Error: currsumLold = " << currsumLold << " > "
+                      << currsumL << " = currsumL (n,m,k,l,j) = (" << n << ","
+                      << m << "," << k << "," << l << "," << j << ")." << endl;
+            // exit(1);
           }
           if (currsumUold < currsumU) {
-            cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-                 << " = currsumU (n,m,k,l,j) = (" << n << "," << m << "," << k
-                 << "," << l << "," << j << ")." << endl;
-            exit(1);
+            // cerr << "Error: currsumUold = " << currsumUold << " < " <<
+            // currsumU
+            std::cout << "Error: currsumUold = " << currsumUold << " < "
+                      << currsumU << " = currsumU (n,m,k,l,j) = (" << n << ","
+                      << m << "," << k << "," << l << "," << j << ")." << endl;
+            // exit(1);
           }
 
           decision_on_mklj_made = (currsumL > u || currsumU < u);
@@ -7656,8 +7668,7 @@ vector<int> WrightFisher::DrawBridgePMF(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -7666,11 +7677,9 @@ vector<int> WrightFisher::DrawBridgePMF(
          << curr_mk[n][1] << "," << curr_mk[n][2] << "," << curr_mk[n][3]
          << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -7679,14 +7688,14 @@ vector<int> WrightFisher::DrawBridgePMF(
 
 vector<int> WrightFisher::DrawBridgePMFOneQApprox(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
-    boost::random::mt19937 &gen) /// Draws from the law of a bridge starting and
-                                 /// ending in the interior of (0,1), but one
-                                 /// time increment is below the threshold
+    boost::random::mt19937 &gen)  /// Draws from the law of a bridge starting
+                                  /// and ending in the interior of (0,1), but
+                                  /// one time increment is below the threshold
 {
   assert((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
   bool ind1 =
-      (s > o.g1984threshold); /// Figure out whether to approximate q_m or q_k
+      (s > o.g1984threshold);  /// Figure out whether to approximate q_m or q_k
   double100 sorts = (ind1 ? s : t - s), sortsapprox = (sorts == s ? t - s : s);
 
   vector<vector<int>> curr_mk;
@@ -7744,14 +7753,12 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
 
   while (!mklj_found) {
     ++n;
-    if (n > 0)
-      curr_mk.push_back(curr_mk.back());
+    if (n > 0) curr_mk.push_back(curr_mk.back());
     increment_on_mk(curr_mk.back(), s, t);
     int &m = curr_mk[n][0];
     int &k = curr_mk[n][1];
     int mork = (ind1 ? m : k), morkapprox = (mork == m ? k : m);
-    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL)
-      counter++;
+    if (m <= mlimU && m >= mlimL && k <= klimU && k >= klimL) counter++;
     if (o.debug > 2)
       cerr << "New n = " << n << ", (m,k) = (" << m << ", " << k << ")" << endl;
 
@@ -7796,7 +7803,7 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
       }
 
       if (eAU[n] == eAL[n] &&
-          eCL == eCU) /// ...then we have lost precision before reaching Fmklj
+          eCL == eCU)  /// ...then we have lost precision before reaching Fmklj
       {
         if (o.debug > 2) {
           cerr << "Abandoning loop for n = " << n << ", Fmklj = " << Fmklj
@@ -7828,14 +7835,11 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
 
     if (o.debug > 2) {
       cerr << "\nn   ";
-      for (int k = 0; k <= n; ++k)
-        cerr << k << " ";
+      for (int k = 0; k <= n; ++k) cerr << k << " ";
       cerr << "\ndL ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dL[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dL[k] << " ";
       cerr << "\ndU ";
-      for (int k = 0; k <= n; ++k)
-        cerr << dU[k] << " ";
+      for (int k = 0; k <= n; ++k) cerr << dU[k] << " ";
       cerr << endl;
     }
 
@@ -7845,7 +7849,7 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
         if (o.debug > 2)
           cerr << "Adding to currsums with A(n,m,k,l,j) = A(" << n << "," << m
                << "," << k << "," << l << "," << j
-               << ") = " << endl; // Amklj[Akey] << endl;
+               << ") = " << endl;  // Amklj[Akey] << endl;
 
         if (Amklj * dL[n] > 1.0 || Amklj * dU[n] < 0.0 || eAU[n] < 0.0 ||
             eAL[n] > 1.0 || eCU < 0.0) {
@@ -7879,7 +7883,7 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
           exit(1);
         }
 
-        while (!decision_on_mklj_made) /// Refine upper and lower bounds
+        while (!decision_on_mklj_made)  /// Refine upper and lower bounds
         {
           double100 currsumLold = currsumL, currsumUold = currsumU;
           currsumL = 0.0;
@@ -7965,16 +7969,20 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
           }
 
           if (currsumLold > currsumL) {
-            cerr << "Error: currsumLold = " << currsumLold << " > " << currsumL
-                 << " = currsumL (n,m,k,l,j) = (" << n << "," << m << "," << k
-                 << "," << l << "," << j << ")." << endl;
-            exit(1);
+            // cerr << "Error: currsumLold = " << currsumLold << " > " <<
+            // currsumL
+            std::cout << "Error: currsumLold = " << currsumLold << " > "
+                      << currsumL << " = currsumL (n,m,k,l,j) = (" << n << ","
+                      << m << "," << k << "," << l << "," << j << ")." << endl;
+            // exit(1);
           }
           if (currsumUold < currsumU) {
-            cerr << "Error: currsumUold = " << currsumUold << " < " << currsumU
-                 << " = currsumU (n,m,k,l,j) = (" << n << "," << m << "," << k
-                 << "," << l << "," << j << ")." << endl;
-            exit(1);
+            // cerr << "Error: currsumUold = " << currsumUold << " < " <<
+            // currsumU
+            std::cout << "Error: currsumUold = " << currsumUold << " < "
+                      << currsumU << " = currsumU (n,m,k,l,j) = (" << n << ","
+                      << m << "," << k << "," << l << "," << j << ")." << endl;
+            // exit(1);
           }
 
           decision_on_mklj_made = (currsumL > u || currsumU < u);
@@ -7988,8 +7996,8 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
       }
     }
 
-    if (counter == totalpts) /// Gaussian approximation leads to currsum summing
-                             /// to < 1.0, so we renormalise and sample
+    if (counter == totalpts)  /// Gaussian approximation leads to currsum
+                              /// summing to < 1.0, so we renormalise and sample
     {
       LogSumExp(currsumStore, runningMax);
       double100 sum = 0.0;
@@ -8020,8 +8028,7 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
   }
 
   int coeffcount = 0;
-  for (int i = 0; i <= n; ++i)
-    coeffcount += (v_used[i] + 1);
+  for (int i = 0; i <= n; ++i) coeffcount += (v_used[i] + 1);
   curr_mk[n].push_back(coeffcount);
   curr_mk[n].push_back(0);
 
@@ -8030,11 +8037,9 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
          << curr_mk[n][1] << "," << curr_mk[n][2] << "," << curr_mk[n][3]
          << ")\n";
     cerr << "n =\t\t\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << i << "\t";
+    for (int i = 0; i <= n; ++i) cerr << i << "\t";
     cerr << "\nv_used =\t";
-    for (int i = 0; i <= n; ++i)
-      cerr << v_used[i] << "\t";
+    for (int i = 0; i <= n; ++i) cerr << v_used[i] << "\t";
     cerr << "Coeffcount = " << coeffcount << endl;
   }
 
@@ -8043,9 +8048,10 @@ vector<int> WrightFisher::DrawBridgePMFOneQApprox(
 
 vector<int> WrightFisher::DrawBridgePMFG1984(
     double100 x, double100 z, double100 s, double100 t, const Options &o,
-    boost::random::mt19937 &gen) /// Draws from the law of a bridge starting and
-                                 /// ending in the interior of (0,1), but both
-                                 /// time increments are below the threshold
+    boost::random::mt19937
+        &gen)  /// Draws from the law of a bridge starting and ending in the
+               /// interior of (0,1), but both time increments are below the
+               /// threshold
 {
   assert((x > 0.0) && (x < 1.0) && (z > 0.0) && (z < 1.0) && (t > s) &&
          (s > 0.0));
@@ -8054,16 +8060,16 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
   vector<int> mkljStore;
   bool mklj_found = false,
        earlyStop =
-           (abs(x - z) <= 0.6); /// earlyStop gauges whether we can use currsum
-                                /// as is, or whether we should compute all
-                                /// probabilities and then sample
+           (abs(x - z) <= 0.6);  /// earlyStop gauges whether we can use currsum
+  /// as is, or whether we should compute all
+  /// probabilities and then sample
 
   /// Compute denominator
   double100 eC = 0.0, eCInc = 1.0, eCOldInc = 1.0;
   int Dflip = 1, Djm = 0, Djp = 0;
   int dmode = static_cast<int>(ceil(GriffithsParas(t).first)), d = dmode;
 
-  while (max(eCOldInc, eCInc) > 0.0) {
+  while (max(eCOldInc, eCInc) > 0.0 || (!(eC > 0.0))) {
     eCOldInc = eCInc;
     double100 addon = 0.0;
     for (int f = 0; f != d; f++) {
@@ -8078,7 +8084,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
     eC += eCInc;
 
     if (Dflip == -1 &&
-        (dmode - Djm - 1 > 0)) // Mechanism to explore either side around mode
+        (dmode - Djm - 1 > 0))  // Mechanism to explore either side around mode
     {
       Djm++;
       d = dmode - Djm;
@@ -8090,13 +8096,13 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
   }
 
   vector<int> modeGuess =
-      mkljModeFinder(x, z, s, t, o); /// Get a guess on mode over (m,k,l,j)
+      mkljModeFinder(x, z, s, t, o);  /// Get a guess on mode over (m,k,l,j)
   int mMode = modeGuess[0], kMode = modeGuess[1], lMode = modeGuess[2],
       jMode = modeGuess[3];
 
   boost::random::uniform_01<double100>
-      U01; /// Use this guess & eC to compute a suitable threshold for
-           /// subsequent computations
+      U01;  /// Use this guess & eC to compute a suitable threshold for
+  /// subsequent computations
   double100 currsum = 0.0, u = U01(gen),
             threshold = exp(mkljModeFinder_Evaluator(mMode, kMode, lMode, jMode,
                                                      x, z, s, t, o) -
@@ -8105,15 +8111,15 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
 
   int m = mMode, mFlip = 1, mD = 0, mU = 0;
   bool mSwitch = false, mDownSwitch = false,
-       mUpSwitch = false; /// Compute m contributions
+       mUpSwitch = false;  /// Compute m contributions
   double100 mContr_D = boost::math::lgamma(
                 static_cast<double100>(thetaP[0] + thetaP[1] + m)),
             mContr_U = mContr_D, mContr, runningMax = -1.0e100;
 
   while (!mSwitch) {
     double100 qm = QmApprox(m, s, o);
-    if (!(qm > 0.0)) /// This should not trigger, but if it does, sets to very
-                     /// small value (taking logs later so cannot be 0!)
+    if (!(qm > 0.0))  /// This should not trigger, but if it does, sets to very
+                      /// small value (taking logs later so cannot be 0!)
     {
       qm = 1.0e-300;
     }
@@ -8133,7 +8139,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
 
     int k = kMode, kFlip = 1, kD = 0, kU = 0;
     bool kSwitch = false, kDownSwitch = false,
-         kUpSwitch = false; /// Compute k contributions
+         kUpSwitch = false;  /// Compute k contributions
     double100 kContr_D =
                   (boost::math::lgamma(
                        static_cast<double100>(thetaP[0] + thetaP[1] + k)) -
@@ -8143,8 +8149,8 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
 
     while (!kSwitch) {
       double100 qk = QmApprox(k, t - s, o);
-      if (!(qk > 0.0)) /// This should not trigger, but if it does, sets to very
-                       /// small value (taking logs later so cannot be 0!)
+      if (!(qk > 0.0))  /// This should not trigger, but if it does, sets to
+                        /// very small value (taking logs later so cannot be 0!)
       {
         qk = 1.0e-300;
       }
@@ -8169,10 +8175,10 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
       }
 
       int lFlip = 1, lU = 0, lD = 0, newlMode = min(lMode, m),
-          l = newlMode; /// Redefine lMode in case m is too small!
+          l = newlMode;  /// Redefine lMode in case m is too small!
       bool lSwitch = false, lDownSwitch = false, lUpSwitch = false;
       boost::math::binomial_distribution<double100> BINL(
-          m, x); /// Compute l contributions
+          m, x);  /// Compute l contributions
       double100 lContr_D = (log(pdf(BINL, l)) -
                             boost::math::lgamma(
                                 static_cast<double100>(thetaP[0] + l)) -
@@ -8204,11 +8210,12 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
         }
 
         int jFlip = 1, jU = 0, jD = 0, newjMode = min(jMode, k),
-            j = newjMode; /// Redefine jMode in case k is too small!
+            j = newjMode;  /// Redefine jMode in case k is too small!
         bool jSwitch = false, jDownSwitch = false,
-             jUpSwitch = false; /// Compute j contributions
+             jUpSwitch = false;  /// Compute j contributions
+
         double100 jContr_D =
-            log(boost::math::binomial_coefficient<double100>(k, j)) +
+            LogBinomialCoefficientCalculator(k, j) +
             boost::math::lgamma(static_cast<double100>(thetaP[0] + l + j)) -
             boost::math::lgamma(static_cast<double100>(thetaP[0] + j)) +
             boost::math::lgamma(
@@ -8249,7 +8256,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
               exp(mContr + kContr + lContr + jContr - log(eC));
           runningMax = max(
               currsum_inc,
-              runningMax); /// Running max needed for log-sum-exp trick later
+              runningMax);  /// Running max needed for log-sum-exp trick later
           currsum += currsum_inc;
           currsumStore.push_back(currsum);
 
@@ -8259,8 +8266,8 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
           mkljStore[2 + (4 * (currsumStore.size() - 1))] = l;
           mkljStore[3 + (4 * (currsumStore.size() - 1))] = j;
 
-          if ((currsum > u) && earlyStop) /// if earlyStop is allowed, we can
-                                          /// stop once currsum exceeds u
+          if ((currsum > u) && earlyStop)  /// if earlyStop is allowed, we can
+                                           /// stop once currsum exceeds u
           {
             returnvec.push_back(m);
             returnvec.push_back(k);
@@ -8271,7 +8278,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
             goto End;
           }
 
-          if (!(jDownSwitch)) /// Switching mechanism for j
+          if (!(jDownSwitch))  /// Switching mechanism for j
           {
             if (sgn(j - newjMode) <= 0) {
               jDownSwitch =
@@ -8303,7 +8310,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
           }
         }
 
-        if (!(lDownSwitch)) /// Switching mechanism for l
+        if (!(lDownSwitch))  /// Switching mechanism for l
         {
           if (sgn(l - newlMode) <= 0) {
             lDownSwitch = (((jU == 0) && (jD == 0)) || (newlMode - lD - 1) < 0);
@@ -8333,7 +8340,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
         }
       }
 
-      if (!(kDownSwitch)) /// Switching mechanism for k
+      if (!(kDownSwitch))  /// Switching mechanism for k
       {
         if (sgn(k - kMode) <= 0) {
           kDownSwitch = (((lU == 0) && (lD == 0)) || (kMode - kD - 1 < 0));
@@ -8361,7 +8368,7 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
       }
     }
 
-    if (!(mDownSwitch)) /// Switching mechanism for m
+    if (!(mDownSwitch))  /// Switching mechanism for m
     {
       if (sgn(m - mMode) <= 0) {
         mDownSwitch = (((kU == 0) && (kD == 0)) || (mMode - mD - 1 < 0));
@@ -8391,13 +8398,14 @@ vector<int> WrightFisher::DrawBridgePMFG1984(
 
 End:
 
-  if (!mklj_found) /// Either earlyStop disable or even with it we still did not
-                   /// get currsum > u - guards against cases when earlyStop is
-                   /// not a good enough indicator of currsum summing to < 1
+  if (!mklj_found)  /// Either earlyStop disable or even with it we still did
+                    /// not get currsum > u - guards against cases when
+                    /// earlyStop is not a good enough indicator of currsum
+                    /// summing to < 1
   {
     LogSumExp(currsumStore,
-              runningMax); /// log-sum-exp trick to normalise and transform
-                           /// vector of log probabilities
+              runningMax);  /// log-sum-exp trick to normalise and transform
+    /// vector of log probabilities
     double100 sum = 0.0;
     int index, ind = 0;
 
@@ -8405,7 +8413,7 @@ End:
     for (int i = 0; i != static_cast<int>(indexing.size()); i++) {
       indexing[i] = i;
     }
-    sort(indexing.begin(), indexing.end(), /// Sort probabilities
+    sort(indexing.begin(), indexing.end(),  /// Sort probabilities
          [&](const int &a, const int &b) {
            return (currsumStore[a] > currsumStore[b]);
          });
@@ -8415,10 +8423,11 @@ End:
     while (!found) {
       sum += currsumStore[indexing[ind]];
       if (sum > u) {
-        index = indexing[ind]; /// Return correct index to sorted probabilities
+        index = indexing[ind];  /// Return correct index to sorted probabilities
         found = true;
       }
-      if (ind == static_cast<int>(currsumStore.size() - 1)) /// Ending condition
+      if (ind ==
+          static_cast<int>(currsumStore.size() - 1))  /// Ending condition
       {
         index = indexing[ind];
         found = true;
@@ -8437,13 +8446,13 @@ End:
 
 double100 WrightFisher::mkModeFinder_Evaluator(
     int m, int k, double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Evaluation function for finding mode over (m,k)
+    const Options &o)  /// Evaluation function for finding mode over (m,k)
 {
   assert((m >= 0) && (k >= 0) && (x >= 0.0) && (x <= 1.0) && (z >= 0.0) &&
          (z <= 1.0) && (s > 0.0) && (s < t));
   double100 qm = QmApprox(m, s, o), qk = QmApprox(k, t - s, o);
-  if (!(qm > 0.0)) /// Ensure qm and qk are not zero when taking logs! If they
-                   /// are, set to a very small positive value
+  if (!(qm > 0.0))  /// Ensure qm and qk are not zero when taking logs! If they
+                    /// are, set to a very small positive value
   {
     qm = 1.0e-300;
   }
@@ -8471,14 +8480,14 @@ double100 WrightFisher::mkModeFinder_Evaluator(
 
 double100 WrightFisher::mkjModeFinder_Evaluator(
     int m, int k, int j, double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Evaluation function for finding mode over (m,k,j)
+    const Options &o)  /// Evaluation function for finding mode over (m,k,j)
 {
   assert((m >= 0) && (k >= 0) && (j >= 0) && (j <= k) && (x >= 0.0) &&
          (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (s > 0.0) && (s < t));
   boost::math::binomial_distribution<> BIN(k, z);
   double100 qm = QmApprox(m, s, o), qk = QmApprox(k, t - s, o);
-  if (!(qm > 0.0)) /// Ensure qm and qk are not zero when taking logs! If they
-                   /// are, set to a very small positive value
+  if (!(qm > 0.0))  /// Ensure qm and qk are not zero when taking logs! If they
+                    /// are, set to a very small positive value
   {
     qm = 1.0e-300;
   }
@@ -8503,15 +8512,15 @@ double100 WrightFisher::mkjModeFinder_Evaluator(
 double100 WrightFisher::mkljModeFinder_Evaluator(
     int m, int k, int l, int j, double100 x, double100 z, double100 s,
     double100 t,
-    const Options &o) /// Evaluation function for finding mode over (m,k,l,j)
+    const Options &o)  /// Evaluation function for finding mode over (m,k,l,j)
 {
   assert((m >= 0) && (k >= 0) && (j >= 0) && (j <= k) && (l >= 0) && (l <= m) &&
          (x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (s > 0.0) &&
          (s < t));
   boost::math::binomial_distribution<> BIN(m, x), BINZ(k, z);
   double100 qm = QmApprox(m, s, o), qk = QmApprox(k, t - s, o);
-  if (!(qm > 0.0)) /// Ensure qm and qk are not zero when taking logs! If they
-                   /// are, set to a very small positive value
+  if (!(qm > 0.0))  /// Ensure qm and qk are not zero when taking logs! If they
+                    /// are, set to a very small positive value
   {
     qm = 1.0e-300;
   }
@@ -8530,13 +8539,13 @@ double100 WrightFisher::mkljModeFinder_Evaluator(
 
 double100 WrightFisher::mklModeFinder_Evaluator(
     int m, int k, int l, double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Evaluation function for finding mode over (m,k,l)
+    const Options &o)  /// Evaluation function for finding mode over (m,k,l)
 {
   assert((m >= 0) && (k >= 0) && (l >= 0) && (l <= m) && (x > 0.0) &&
          (x < 1.0) && (!(z > 0.0) || !(z < 1.0)) && (s > 0.0) && (s < t));
   double100 qm = QmApprox(m, s, o), qk = QmApprox(k, t - s, o);
-  if (!(qm > 0.0)) /// Ensure qm and qk are not zero when taking logs! If they
-                   /// are, set to a very small positive value
+  if (!(qm > 0.0))  /// Ensure qm and qk are not zero when taking logs! If they
+                    /// are, set to a very small positive value
   {
     qm = 1.0e-300;
   }
@@ -8556,13 +8565,13 @@ double100 WrightFisher::mklModeFinder_Evaluator(
 
 vector<int> WrightFisher::mkModeFinder(
     double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Routine for finding mode over (m,k)
+    const Options &o)  /// Routine for finding mode over (m,k)
 {
   vector<int> returnvec;
   int m = static_cast<int>(floor(GriffithsParas(s).first)),
       k = static_cast<int>(floor(GriffithsParas(t - s).first));
 
-  int m_ud, k_ud; /// Start at mode from qm and qk
+  int m_ud, k_ud;  /// Start at mode from qm and qk
   double100 currMode_eval = mkModeFinder_Evaluator(m, k, x, z, s, t, o);
 
   bool stop = false;
@@ -8595,7 +8604,7 @@ vector<int> WrightFisher::mkModeFinder(
     currMode_eval = mkModeFinder_Evaluator(m, k, x, z, s, t, o);
 
     if (!(m_ud > 0) && !(m_ud < 0) && !(k_ud > 0) &&
-        !(k_ud < 0)) /// Keep iterating until both m & k told to not change
+        !(k_ud < 0))  /// Keep iterating until both m & k told to not change
     {
       stop = true;
       returnvec.push_back(m);
@@ -8608,14 +8617,14 @@ vector<int> WrightFisher::mkModeFinder(
 
 vector<int> WrightFisher::mkjModeFinder(
     double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Routine for finding mode over (m,k,j)
+    const Options &o)  /// Routine for finding mode over (m,k,j)
 {
   vector<int> returnvec;
   int m = static_cast<int>(floor(GriffithsParas(s).first)),
       k = static_cast<int>(floor(GriffithsParas(t - s).first));
   int j = static_cast<int>(floor(static_cast<double100>(k) * z));
 
-  int m_ud, k_ud, j_ud; /// Starting from the modes of qm, qk and Bin(k,z)
+  int m_ud, k_ud, j_ud;  /// Starting from the modes of qm, qk and Bin(k,z)
   double100 currMode_eval = mkjModeFinder_Evaluator(m, k, j, x, z, s, t, o);
 
   bool stop = false;
@@ -8706,7 +8715,7 @@ vector<int> WrightFisher::mkjModeFinder(
 
 vector<int> WrightFisher::mkljModeFinder(
     double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Routine for finding mode over (m,k,l,j)
+    const Options &o)  /// Routine for finding mode over (m,k,l,j)
 {
   vector<int> returnvec;
   int m = static_cast<int>(floor(GriffithsParas(s).first)),
@@ -8715,7 +8724,7 @@ vector<int> WrightFisher::mkljModeFinder(
       j = static_cast<int>(floor(static_cast<double100>(k) * z));
 
   int m_ud, k_ud, l_ud,
-      j_ud; /// Initialise at modes from qm, qk, Bin(m,x), Bin(k,z)
+      j_ud;  /// Initialise at modes from qm, qk, Bin(m,x), Bin(k,z)
   double100 currMode_eval = mkljModeFinder_Evaluator(m, k, l, j, x, z, s, t, o);
 
   bool stop = false;
@@ -8852,7 +8861,7 @@ vector<int> WrightFisher::mkljModeFinder(
 
 vector<int> WrightFisher::mklModeFinder(
     double100 x, double100 z, double100 s, double100 t,
-    const Options &o) /// Routine for finding mode over (m,k,l)
+    const Options &o)  /// Routine for finding mode over (m,k,l)
 {
   vector<int> returnvec;
   int m = static_cast<int>(floor(GriffithsParas(s).first)),
@@ -8863,7 +8872,7 @@ vector<int> WrightFisher::mklModeFinder(
   int m_ud = -1, k_ud = -1, l_ud = -1,
       mkLower = thetaP.empty()
                     ? 1
-                    : 0; /// Starting from the modes of qm, qk and Bin(m,x)
+                    : 0;  /// Starting from the modes of qm, qk and Bin(m,x)
   double100 currMode_eval = mklModeFinder_Evaluator(m, k, l, x, z, s, t, o);
 
   bool rerun = false;
@@ -8961,8 +8970,8 @@ vector<int> WrightFisher::mklModeFinder(
       (thetaP.empty() || (!(thetaP[1] > 0.0) && (l == m)))) {
     l = ((thetaP.empty() || (!(thetaP[0] > 0.0) && (l == 0)))
              ? 1
-             : m - 1); /// Sometimes l == 0/m but cannot be for cases when
-                       /// thetaP.empty()
+             : m - 1);  /// Sometimes l == 0/m but cannot be for cases when
+                        /// thetaP.empty()
   }
 
   returnvec.push_back(m);
@@ -8976,13 +8985,13 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
     double100 x, double100 z, double100 t1, double100 t2, double100 s,
     const Options &o,
     boost::random::mt19937
-        &gen) /// Routine to decide which bridge sampler to invoke for sampling
-              /// at time s from neutral bridge diffusion started at x at time
-              /// t1, ending at z in time t2, conditioned on non-absorption on
-              /// (t1,t2)
+        &gen)  /// Routine to decide which bridge sampler to invoke for sampling
+               /// at time s from neutral bridge diffusion started at x at time
+               /// t1, ending at z in time t2, conditioned on non-absorption on
+               /// (t1,t2)
 {
-  assert((x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (t1 >= 0.0) &&
-         (s > t1) && (s < t2));
+  assert((x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (s > t1) &&
+         (s < t2));
   double100 y, para1, para2;
   int m, k, j, l, coeffcount = -1;
   vector<int> mklj;
@@ -8990,38 +8999,41 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
   if ((s - t1 <= o.bridgethreshold || t2 - s <= o.bridgethreshold) ||
       (((theta - 1.0) / (exp(0.5 * theta * (s - t1)))) +
            ((theta - 1.0) / (exp(0.5 * theta * (t2 - s)))) >
-       260.0)) /// Use diffusion approximations
-  { /// Last condition checks that corresponding m and k terms are not too large
+       260.0))  /// Use diffusion approximations
+  {
+    /// Last condition checks that corresponding m and k terms are not too
+    /// large
     /// to create computational bottleneck
     double100 y1 =
         DrawEndpoint(x, t1, s, o, gen)
-            .first; /// Diffusion approximation for when times are too small and
-                    /// bridge takes too long to compute
+            .first;  /// Diffusion approximation for when times are too small
+    /// and bridge takes too long to compute
 
     y = abs((y1 - x) + ((t2 - s) / (t2 - t1)) * x +
-            ((s - t1) / (t2 - t1)) * z); /// Ensures y remains positive
+            ((s - t1) / (t2 - t1)) * z);  /// Ensures y remains positive
 
-    if (y > 1.0) /// Ensure y remains <= 1.0
+    if (y > 1.0)  /// Ensure y remains <= 1.0
     {
       y = 1.0 - abs(1.0 - y);
     }
-  } else /// Else use bridge simulator
+  } else  /// Else use bridge simulator
   {
-    if (!(x > 0.0)) /// x = 0
+    if (!(x > 0.0))  /// x = 0
     {
-      if (!(z > 0.0)) /// x = 0 & z = 0
+      if (!(z > 0.0))  /// x = 0 & z = 0
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFSameMutationApprox(x, s - t1, t2 - t1, gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj =
               DrawBridgePMFSameMutationOneQApprox(x, s - t1, t2 - t1, o, gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFSameMutation(x, s - t1, t2 - t1, o, gen);
         }
@@ -9030,20 +9042,21 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         k = mklj[1];
         l = 0;
         j = 0;
-      } else if (!(z < 1.0)) /// x = 0 & z = 1
+      } else if (!(z < 1.0))  /// x = 0 & z = 1
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj =
               DrawBridgePMFDifferentMutationApprox(s - t1, t2 - t1, x, o, gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj = DrawBridgePMFDifferentMutationOneQApprox(s - t1, t2 - t1, x, o,
                                                           gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFDifferentMutation(s - t1, t2 - t1, x, o, gen);
         }
@@ -9052,20 +9065,21 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         k = mklj[1];
         l = 0;
         j = k;
-      } else /// x = 0 & z in (0,1)
+      } else  /// x = 0 & z in (0,1)
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFInteriorMutationApprox(x, z, s - t1, t2 - t1, o,
                                                      gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj = DrawBridgePMFInteriorMutationOneQApprox(x, z, s - t1, t2 - t1,
                                                          o, gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFInteriorMutation(x, z, s - t1, t2 - t1, o, gen);
         }
@@ -9075,22 +9089,23 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         l = mklj[2];
         j = mklj[3];
       }
-    } else if (!(x < 1.0)) /// x = 1
+    } else if (!(x < 1.0))  /// x = 1
     {
-      if (!(z > 0.0)) /// x = 1 & z = 0
+      if (!(z > 0.0))  /// x = 1 & z = 0
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj =
               DrawBridgePMFDifferentMutationApprox(s - t1, t2 - t1, x, o, gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj = DrawBridgePMFDifferentMutationOneQApprox(s - t1, t2 - t1, x, o,
                                                           gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFDifferentMutation(s - t1, t2 - t1, x, o, gen);
         }
@@ -9099,19 +9114,20 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         k = mklj[1];
         l = m;
         j = 0;
-      } else if (!(z < 1.0)) /// x = 1 & z = 1
+      } else if (!(z < 1.0))  /// x = 1 & z = 1
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFSameMutationApprox(x, s - t1, t2 - t1, gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj =
               DrawBridgePMFSameMutationOneQApprox(x, s - t1, t2 - t1, o, gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFSameMutation(x, s - t1, t2 - t1, o, gen);
         }
@@ -9120,20 +9136,21 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         k = mklj[1];
         l = m;
         j = k;
-      } else /// x = 1 & z in (0,1)
+      } else  /// x = 1 & z in (0,1)
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s <= o.g1984threshold) /// Time increments both below threshold
+            t2 - s <=
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFInteriorMutationApprox(x, z, s - t1, t2 - t1, o,
                                                      gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj = DrawBridgePMFInteriorMutationOneQApprox(x, z, s - t1, t2 - t1,
                                                          o, gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMFInteriorMutation(x, z, s - t1, t2 - t1, o, gen);
         }
@@ -9143,82 +9160,82 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         l = mklj[2];
         j = mklj[3];
       }
-    } else /// x in (0,1)
+    } else  /// x in (0,1)
     {
-      if (!(z > 0.0)) /// x in (0,1) & z = 0
+      if (!(z > 0.0))  /// x in (0,1) & z = 0
       {
         double100 newt2 = t2 - t1, news = t2 - s;
 
         if (news <= o.g1984threshold &&
             newt2 - news <=
-                o.g1984threshold) /// Time increments both below threshold
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFInteriorMutationApprox(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
-        }           /// One time increment both below threshold
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
+        }            /// One time increment both below threshold
         else if ((news <= o.g1984threshold &&
                   newt2 - news > o.g1984threshold) ||
                  (news > o.g1984threshold &&
                   newt2 - news <= o.g1984threshold)) {
           mklj = DrawBridgePMFInteriorMutationOneQApprox(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
-        } else      /// Time increments are large enough for alternating series
-                    /// method
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
+        } else       /// Time increments are large enough for alternating series
+                     /// method
         {
           mklj = DrawBridgePMFInteriorMutation(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
         }
 
         m = mklj[0];
         k = mklj[1];
         l = mklj[2];
         j = mklj[3];
-      } else if (!(z < 1.0)) /// x in (0,1) & z = 1
+      } else if (!(z < 1.0))  /// x in (0,1) & z = 1
       {
         double100 newt2 = t2 - t1, news = t2 - s;
 
         if (news <= o.g1984threshold &&
             newt2 - news <=
-                o.g1984threshold) /// Time increments both below threshold
+                o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFInteriorMutationApprox(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
-        }           /// One time increment both below threshold
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
+        }            /// One time increment both below threshold
         else if ((news <= o.g1984threshold &&
                   newt2 - news > o.g1984threshold) ||
                  (news > o.g1984threshold &&
                   newt2 - news <= o.g1984threshold)) {
           mklj = DrawBridgePMFInteriorMutationOneQApprox(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
-        } else      /// Time increments are large enough for alternating series
-                    /// method
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
+        } else       /// Time increments are large enough for alternating series
+                     /// method
         {
           mklj = DrawBridgePMFInteriorMutation(
               z, x, news, newt2, o,
-              gen); /// Time reversal! Flip x and z because reverse time bridge
+              gen);  /// Time reversal! Flip x and z because reverse time bridge
         }
 
         m = mklj[0];
         k = mklj[1];
         l = mklj[2];
         j = mklj[3];
-      } else /// x in (0,1) & z in (0,1)
+      } else  /// x in (0,1) & z in (0,1)
       {
         if (s - t1 <= o.g1984threshold &&
-            t2 - s < o.g1984threshold) /// Time increments both below threshold
+            t2 - s < o.g1984threshold)  /// Time increments both below threshold
         {
           mklj = DrawBridgePMFG1984(x, z, s - t1, t2 - t1, o, gen);
-        } /// One time increment both below threshold
+        }  /// One time increment both below threshold
         else if ((s - t1 <= o.g1984threshold && t2 - s > o.g1984threshold) ||
                  (s - t1 > o.g1984threshold && t2 - s <= o.g1984threshold)) {
           mklj = DrawBridgePMFOneQApprox(x, z, s - t1, t2 - t1, o, gen);
-        } else /// Time increments are large enough for alternating series
-               /// method
+        } else  /// Time increments are large enough for alternating series
+                /// method
         {
           mklj = DrawBridgePMF(x, z, s - t1, t2 - t1, o, gen);
         }
@@ -9249,13 +9266,13 @@ pair<double100, int> WrightFisher::DrawUnconditionedBridge(
     double100 x, double100 z, double100 t1, double100 t2, double100 s,
     const Options &o,
     boost::random::mt19937
-        &gen) /// Routine to decide which bridge sampler to invoke for sampling
-              /// at time s from neutral bridge diffusion started at x at time
-              /// t1, ending at z in time t2, with potential absorption at any
-              /// time in between [t1,t2]
+        &gen)  /// Routine to decide which bridge sampler to invoke for sampling
+               /// at time s from neutral bridge diffusion started at x at time
+               /// t1, ending at z in time t2, with potential absorption at any
+               /// time in between [t1,t2]
 {
-  assert((x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (t1 >= 0.0) &&
-         (s > t1) && (s < t2));
+  assert((x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0) && (s > t1) &&
+         (s < t2));
   double100 y, para1, para2;
   int m = -1, k = -1, j = -1, l = -1, coeffcount = -1;
   vector<int> mklj;
@@ -9263,18 +9280,20 @@ pair<double100, int> WrightFisher::DrawUnconditionedBridge(
   if ((s - t1 <= o.bridgethreshold || t2 - s <= o.bridgethreshold) ||
       (((theta - 1.0) / (exp(0.5 * theta * (s - t1)))) +
            ((theta - 1.0) / (exp(0.5 * theta * (t2 - s)))) >
-       260.0)) /// Use diffusion approximations
-  { /// Last condition checks that corresponding m and k terms are not too large
+       260.0))  /// Use diffusion approximations
+  {
+    /// Last condition checks that corresponding m and k terms are not too
+    /// large
     /// to create computational bottleneck
     double100 y1 =
         DrawEndpoint(x, t1, s, o, gen)
-            .first; /// Diffusion approximation for when times are too small and
-                    /// bridge takes too long to compute
+            .first;  /// Diffusion approximation for when times are too small
+    /// and bridge takes too long to compute
 
     y = abs((y1 - x) + ((t2 - s) / (t2 - t1)) * x +
-            ((s - t1) / (t2 - t1)) * z); /// Ensures y remains positive
+            ((s - t1) / (t2 - t1)) * z);  /// Ensures y remains positive
 
-    if (y > 1.0) /// Ensure y remains <= 1.0
+    if (y > 1.0)  /// Ensure y remains <= 1.0
     {
       y = 1.0 - abs(1.0 - y);
     }
@@ -9347,8 +9366,8 @@ pair<double100, int> WrightFisher::DrawUnconditionedBridge(
           if (l == m) {
             return make_pair(1.0, coeffcount);
           }
-        } else /// Otherwise the conditions imposed imply the diffusion cannot
-               /// be absorbed over [t1,t2], so we can use Drawbridgepoint
+        } else  /// Otherwise the conditions imposed imply the diffusion cannot
+                /// be absorbed over [t1,t2], so we can use Drawbridgepoint
         {
           ThetaResetter();
           return DrawBridgepoint(x, z, t1, t2, s, o, gen);
@@ -9436,8 +9455,8 @@ pair<double100, int> WrightFisher::DrawUnconditionedBridge(
           }
         }
       }
-    } else /// No absorption can happen, so we are in the same case as in
-           /// DrawBridgepoint
+    } else  /// No absorption can happen, so we are in the same case as in
+            /// DrawBridgepoint
     {
       ThetaResetter();
       return DrawBridgepoint(x, z, t1, t2, s, o, gen);
@@ -9471,44 +9490,45 @@ vector<vector<double100>> WrightFisher::NonNeutralDrawBridge(
     double100 x, double100 t1, double100 t2, double100 z, bool Absorption,
     const Options &o,
     boost::random::mt19937
-        &gen) /// Draws of paths from non-neutral WF diffusion bridge started
-              /// from x at time t1 and ending at z at time t2
+        &gen)  /// Draws of paths from non-neutral WF diffusion bridge started
+               /// from x at time t1 and ending at z at time t2
 {
   bool accept = false;
   vector<double100> paras{phiMin, phiMax, phiMax - phiMin};
-  double100 kapmean = paras[2] * (t2 - t1); /// Rate of Poisson point process
+  double100 kapmean = paras[2] * (t2 - t1);  /// Rate of Poisson point process
   boost::random::poisson_distribution<int> kap(static_cast<double>(kapmean));
 
   boost::random::uniform_01<double100> unift,
-      unifm; /// Set up uniform generators for points over [t1,t2] *
-             /// [0,phiMax-phiMin] * [0,1]
+      unifm;  /// Set up uniform generators for points over [t1,t2] *
+  /// [0,phiMax-phiMin] * [0,1]
   vector<vector<double100>> ptr;
   int rcount = 0;
   vector<double100> kappastore;
 
-  while (!accept) /// Until all skeleton points get accepted, keep going
+  while (!accept)  /// Until all skeleton points get accepted, keep going
   {
-    int kappa = kap(gen); /// Generate kappa ~ Pois
+    int kappa = kap(gen);  /// Generate kappa ~ Pois
+    double100 small_offset = 1.0e-14;
     vector<double100> path, times(kappa), marks(kappa), rejcount;
-    auto gent = [&t1, &t2, &unift, &gen]() /// time stamps ~ Unif [t1,t2]
-    { return (t1 + ((t2 - t1) * unift(gen))); };
-    auto genm = [&paras, &unifm, &gen]() /// marks ~ Unif [0,phiMax-phiMin]
+    auto gent = [&t1, &t2, &unift, &small_offset,
+                 &gen]()  /// time stamps ~ Unif [t1,t2]
+    { return (t1 + small_offset + ((t2 - t1) * unift(gen))); };
+    auto genm = [&paras, &unifm, &gen]()  /// marks ~ Unif [0,phiMax-phiMin]
     { return (paras[2] * unifm(gen)); };
-    generate(begin(times), end(times), gent);
-    generate(begin(marks), end(marks), genm);
+    std::generate(begin(times), end(times), gent);
+    std::generate(begin(marks), end(marks), genm);
     sortVectorsAscending(times, times,
-                         marks); /// Sort vectors according to timestamps
+                         marks);  /// Sort vectors according to timestamps
 
-    if (kappa == 0) /// No skeleton points -> accept
+    if (kappa == 0)  /// No skeleton points -> accept
     {
-      rejcount.push_back(rcount);
       kappastore.push_back(1.0 * kappa);
       ptr.push_back(path);
       ptr.push_back(times);
-      ptr.push_back(rejcount);
+      ptr.push_back(marks);
       ptr.push_back(kappastore);
       accept = true;
-    } else /// kappa > 0 - generate skeleton points and check them
+    } else  /// kappa > 0 - generate skeleton points and check them
     {
       for (vector<double100>::iterator itt = times.begin(), itm = marks.begin();
            itt != times.end(); itt++, itm++) {
@@ -9519,31 +9539,30 @@ vector<vector<double100>> WrightFisher::NonNeutralDrawBridge(
           } else {
             path.push_back(
                 DrawBridgepoint(x, z, t1, t2, *itt, o, gen)
-                    .first); /// Generate skeleton points sequentially
+                    .first);  /// Generate skeleton points sequentially
           }
 
           if (Phitilde(path.back()) - paras[0] >
-              *itm) /// Test generated point is OK, otherwise can stop and
-                    /// generate a new Poisson point process
+              *itm)  /// Test generated point is OK, otherwise can stop and
+                     /// generate a new Poisson point process
           {
             rcount++;
             break;
           }
 
-          if (kappa == 1) /// We only needed to generate one skeleton point,
-                          /// which we accepted, so we can exit
+          if (kappa == 1)  /// We only needed to generate one skeleton point,
+                           /// which we accepted, so we can exit
           {
-            rejcount.push_back(rcount);
             kappastore.push_back(1.0 * kappa);
             ptr.push_back(path);
             ptr.push_back(times);
-            ptr.push_back(rejcount);
+            ptr.push_back(marks);
             ptr.push_back(kappastore);
             accept = true;
           }
         } else if (*itt !=
-                   times.back()) /// There are more than 2 skeleton points, and
-                                 /// we are not at the last one yet
+                   times.back())  /// There are more than 2 skeleton points, and
+                                  /// we are not at the last one yet
         {
           if (Absorption) {
             path.push_back(DrawUnconditionedBridge(path.back(), z, *(itt - 1),
@@ -9552,40 +9571,40 @@ vector<vector<double100>> WrightFisher::NonNeutralDrawBridge(
           } else {
             path.push_back(
                 DrawBridgepoint(path.back(), z, *(itt - 1), t2, *itt, o, gen)
-                    .first); /// Generate skeleton points sequentially
+                    .first);  /// Generate skeleton points sequentially
           }
 
           if (Phitilde(path.back()) - paras[0] >
-              *itm) /// Check the generated point is OK, otherwise can stop and
-                    /// generate a new Poisson point process
+              *itm)  /// Check the generated point is OK, otherwise can stop and
+                     /// generate a new Poisson point process
           {
             rcount++;
             break;
           }
-        } else /// We are at the last skeleton point
+        } else  /// We are at the last skeleton point
         {
           if (Absorption) {
-            path.push_back(DrawUnconditionedBridge(path.back(), z, *(itt - 1),
-                                                   t2, *itt, o, gen)
-                               .first); /// Generate skeleton point sequentially
+            path.push_back(
+                DrawUnconditionedBridge(path.back(), z, *(itt - 1), t2, *itt, o,
+                                        gen)
+                    .first);  /// Generate skeleton point sequentially
           } else {
             path.push_back(
                 DrawBridgepoint(path.back(), z, *(itt - 1), t2, *itt, o, gen)
-                    .first); /// Generate skeleton point sequentially
+                    .first);  /// Generate skeleton point sequentially
           }
 
           if (Phitilde(path.back()) - paras[0] >
-              *itm) /// Check the generated point is OK, otherwise can stop and
-                    /// generate a new Poisson point process
+              *itm)  /// Check the generated point is OK, otherwise can stop and
+                     /// generate a new Poisson point process
           {
             rcount++;
             break;
           }
-          rejcount.push_back(rcount); /// We are at the end, so we can just exit
           kappastore.push_back(1.0 * kappa);
           ptr.push_back(path);
           ptr.push_back(times);
-          ptr.push_back(rejcount);
+          ptr.push_back(marks);
           ptr.push_back(kappastore);
           accept = true;
         }
@@ -9600,16 +9619,16 @@ pair<double100, int> WrightFisher::NonNeutralDrawBridgepoint(
     double100 x, double100 t1, double100 t2, double100 z, double100 testT,
     bool Absorption, const Options &o,
     boost::random::mt19937
-        &gen) /// Invoke NonNeutralDrawBridge to generate a whole bridge path,
-              /// conditionally on the generated path, generate a neutral draw
-              /// at time testT
+        &gen)  /// Invoke NonNeutralDrawBridge to generate a whole bridge path,
+               /// conditionally on the generated path, generate a neutral draw
+               /// at time testT
 {
   vector<double100> bridgeSection, bridgeTimes;
   bridgeSection.push_back(x);
   bridgeTimes.push_back(t1);
 
   vector<vector<double100>> skeleton = NonNeutralDrawBridge(
-      x, t1, t2, z, Absorption, o, gen); /// Create skeleton points for bridge
+      x, t1, t2, z, Absorption, o, gen);  /// Create skeleton points for bridge
   bridgeSection.insert(bridgeSection.end(), skeleton[0].begin(),
                        skeleton[0].end());
   bridgeTimes.insert(bridgeTimes.end(), skeleton[1].begin(), skeleton[1].end());
@@ -9619,8 +9638,9 @@ pair<double100, int> WrightFisher::NonNeutralDrawBridgepoint(
 
   vector<double100>::iterator timeIt = bridgeTimes.begin(),
                               xIt = bridgeSection.begin();
-  while (*timeIt <
-         testT) /// Cycle through skeleton points to find appropriate end points
+  while (
+      *timeIt <
+      testT)  /// Cycle through skeleton points to find appropriate end points
   {
     timeIt++;
     xIt++;
@@ -9632,8 +9652,8 @@ pair<double100, int> WrightFisher::NonNeutralDrawBridgepoint(
                                    testT, o, gen);
   } else {
     return DrawBridgepoint(*xIt, *(xIt + 1), *timeIt, *(timeIt + 1), testT, o,
-                           gen); /// Return neutral draw using corresponding
-                                 /// endpoints and time increments
+                           gen);  /// Return neutral draw using corresponding
+                                  /// endpoints and time increments
   }
 }
 
@@ -9641,13 +9661,53 @@ pair<double100, int> WrightFisher::NonNeutralDrawBridgepoint(
 
 void WrightFisher::DiffusionRunner(
     int nSim, double100 x, double100 startT, double100 endT, bool Absorption,
-    string &Filename, const Options &o,
-    boost::random::mt19937
-        &gen) /// Function to generate specified number of diffusion draws
+    string &Filename, double100 diffusion_threshold,
+    double100 bridge_threshold)  /// Function to generate specified number of
+                                 /// diffusion draws
 {
+  std::cout << "You've asked to generate " << nSim
+            << " draws from the law of a Wright--Fisher diffusion with the "
+               "following properties:"
+            << std::endl;
+  std::cout << "Start point: " << x << std::endl;
+  std::cout << "Start time: " << startT << std::endl;
+  std::cout << "Sampling time: " << endT << std::endl;
+  if (Absorption) {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary, but the provided mutation rates "
+                   "are strictly positive, so the diffusion cannot be absorbed"
+                << std::endl;
+    }
+  } else {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion cannot be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout
+          << "You have further specified that the diffusion cannot be "
+             "absorbed at the boundary, but the provided mutation rates "
+             "are strictly positive and thus already ensure this, so the "
+             "resulting draws are coming from the *unconditioned* diffusion!"
+          << std::endl;
+    }
+  }
+  std::cout << "You've further specified the time threshold for Gaussian "
+               "approximations at "
+            << diffusion_threshold << std::endl;
+  std::cout << "Output will be printed to file in " << Filename << std::endl;
+  const Options o(diffusion_threshold, bridge_threshold);
   ofstream saveFile;
   saveFile.open(Filename);
 
+  boost::random::mt19937 gen;
   int nosamples = 1, loader = floor(0.1 * nSim), loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
@@ -9665,23 +9725,69 @@ void WrightFisher::DiffusionRunner(
 
     nosamples++;
     if (nosamples % (loader * loader_count) == 0) {
-      cout << "Simulated " << nosamples << " samples." << endl;
+      std::cout << "Simulated " << nosamples << " samples." << endl;
       loader_count++;
     }
   }
 
-  cout << "Diffusion simulation complete." << endl;
+  std::cout << "Diffusion simulation complete." << endl;
 }
 
 void WrightFisher::BridgeDiffusionRunner(
     int nSim, double100 x, double100 z, double100 startT, double100 endT,
-    double100 sampleT, bool Absorption, string &Filename, const Options &o,
-    boost::random::mt19937
-        &gen) /// Function to generate specified number of bridge draws
+    double100 sampleT, bool Absorption, string &Filename,
+    double100 diffusion_threshold,
+    double100 bridge_threshold)  /// Function to generate specified number of
+                                 /// bridge draws
 {
+  std::cout
+      << "You've asked to generate " << nSim
+      << " draws from the law of a Wright--Fisher diffusion bridge with the "
+         "following properties:"
+      << std::endl;
+  std::cout << "Start point: " << x << std::endl;
+  std::cout << "Start time: " << startT << std::endl;
+  std::cout << "End point: " << z << std::endl;
+  std::cout << "End time: " << endT << std::endl;
+  std::cout << "Sampling time: " << sampleT << std::endl;
+  if (Absorption) {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary, but the provided mutation rates "
+                   "are strictly positive, so the diffusion cannot be absorbed"
+                << std::endl;
+    }
+  } else {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion cannot be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout
+          << "You have further specified that the diffusion cannot be "
+             "absorbed at the boundary, but the provided mutation rates "
+             "are strictly positive and thus already ensure this, so the "
+             "resulting draws are coming from the *unconditioned* diffusion!"
+          << std::endl;
+    }
+  }
+  std::cout << "You've further specified the time threshold for Gaussian "
+               "approximations at "
+            << diffusion_threshold
+            << ", whilst the bridge approximations threshold was set to "
+            << bridge_threshold << std::endl;
+  std::cout << "Output will be printed to file in " << Filename << std::endl;
+  const Options o(diffusion_threshold, bridge_threshold);
   ofstream saveFile;
   saveFile.open(Filename);
 
+  boost::random::mt19937 gen;
   int nosamples = 1, loader = floor(0.1 * nSim), loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
@@ -9703,38 +9809,80 @@ void WrightFisher::BridgeDiffusionRunner(
 
     nosamples++;
     if (nosamples % (loader * loader_count) == 0) {
-      cout << "Simulated " << nosamples << " samples." << endl;
+      std::cout << "Simulated " << nosamples << " samples." << endl;
       loader_count++;
     }
   }
 
-  cout << "Bridge simulation complete." << endl;
+  std::cout << "Bridge simulation complete." << endl;
 }
 
 void WrightFisher::DiffusionDensityCalculator(
     int meshSize, double100 x, double100 startT, double100 endT,
-    bool Absorption, string &Filename,
-    const Options
-        &o) /// Function to compute truncated diffusion transition density
+    bool Absorption, string &Filename, double100 diffusion_threshold,
+    double100 bridge_threshold)  /// Function to compute truncated diffusion
+                                 /// transition density
 {
+  std::cout << "You've asked to compute the transition density of a "
+               "Wright--Fisher diffusion with the "
+               "following properties:"
+            << std::endl;
+  std::cout << "Start point: " << x << std::endl;
+  std::cout << "Start time: " << startT << std::endl;
+  std::cout << "Sampling time: " << endT << std::endl;
+  if (Absorption) {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary, but the provided mutation rates "
+                   "are strictly positive, so the diffusion cannot be absorbed"
+                << std::endl;
+    }
+  } else {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion cannot be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout
+          << "You have further specified that the diffusion cannot be "
+             "absorbed at the boundary, but the provided mutation rates "
+             "are strictly positive and thus already ensure this, so the "
+             "resulting draws are coming from the *unconditioned* diffusion!"
+          << std::endl;
+    }
+  }
+  std::cout << "You've further specified the time threshold for Gaussian "
+               "approximations at "
+            << diffusion_threshold << std::endl;
+  std::cout << "The pointwise computation will be performed over a mesh "
+               "consisting of "
+            << meshSize << " equally spaced intervals on [0,1]" << std::endl;
+  std::cout << "Output will be printed to file in " << Filename << std::endl;
+  const Options o(diffusion_threshold, bridge_threshold);
   ofstream saveFile;
   saveFile.open(Filename);
 
   int counter = 0;
   double100 timeInc = endT - startT,
             yinc = 1.0 / static_cast<double100>(meshSize), y, ycount = 0.1;
-  while (counter <= meshSize) {
-    if (counter == 0) {
-      y = 0.0;
-    } else if (counter == meshSize) {
-      y = 1.0;
-    } else {
-      y += yinc;
-    }
-    if (non_neutral) {
-      cerr << "Truncated density cannot be computed for non-neutral case due "
-              "to presence of intractable quantities!";
-    } else {
+  if (non_neutral) {
+    cerr << "Truncated density cannot be computed for non-neutral case due "
+            "to presence of intractable quantities!";
+  } else {
+    while (counter <= meshSize) {
+      if (counter == 0) {
+        y = 0.0;
+      } else if (counter == meshSize) {
+        y = 1.0;
+      } else {
+        y += yinc;
+      }
       if (Absorption) {
         if ((x > 0.0) && (x < 1.0)) {
           saveFile << y << " "
@@ -9750,26 +9898,73 @@ void WrightFisher::DiffusionDensityCalculator(
         saveFile << y << " " << DiffusionDensityApproximation(x, y, timeInc, o)
                  << "\n";
       }
+
+      if (y >= ycount) {
+        std::cout << "Calculated density up to y = " << ycount << endl;
+        ycount += 0.1;
+      }
+      counter++;
     }
 
-    if (y >= ycount) {
-      cout << "Calculated density up to y = " << ycount << endl;
-      ycount += 0.1;
-    }
-    counter++;
+    std::cout << "Density calculation complete." << endl;
+
+    saveFile.close();
   }
-
-  cout << "Density calculation complete." << endl;
-
-  saveFile.close();
 }
 
 void WrightFisher::BridgeDiffusionDensityCalculator(
     int meshSize, double100 x, double100 z, double100 startT, double100 endT,
     double100 sampleT, bool Absorption, string &Filename,
-    const Options &
-        o) /// Function to compute truncated diffusion bridge transition density
+    double100 diffusion_threshold,
+    double100 bridge_threshold)  /// Function to compute truncated diffusion
+                                 /// bridge transition density
 {
+  std::cout << "You've asked to compute the transition density of a "
+               "Wright--Fisher diffusion bridge with the "
+               "following properties:"
+            << std::endl;
+  std::cout << "Start point: " << x << std::endl;
+  std::cout << "Start time: " << startT << std::endl;
+  std::cout << "End point: " << z << std::endl;
+  std::cout << "End time: " << endT << std::endl;
+  std::cout << "Sampling time: " << sampleT << std::endl;
+  if (Absorption) {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout << "You have further specified that the diffusion can be "
+                   "absorbed at the boundary, but the provided mutation rates "
+                   "are strictly positive, so the diffusion cannot be absorbed"
+                << std::endl;
+    }
+  } else {
+    if (thetaP.empty() || ((thetaP.front() == 0.0 && thetaP.back() != 0.0) ||
+                           (thetaP.front() != 0.0 && thetaP.back() == 0.0))) {
+      std::cout << "You have further specified that the diffusion cannot be "
+                   "absorbed at the boundary"
+                << std::endl;
+    } else {
+      std::cout
+          << "You have further specified that the diffusion cannot be "
+             "absorbed at the boundary, but the provided mutation rates "
+             "are strictly positive and thus already ensure this, so the "
+             "resulting draws are coming from the *unconditioned* diffusion!"
+          << std::endl;
+    }
+  }
+  std::cout << "You've further specified the time threshold for Gaussian "
+               "approximations at "
+            << diffusion_threshold
+            << ", whilst the bridge approximations threshold was set to "
+            << bridge_threshold << std::endl;
+  std::cout << "The pointwise computation will be performed over a mesh "
+               "consisting of "
+            << meshSize << "equally spaced intervals on [0,1]" << std::endl;
+  std::cout << "Output will be printed to file in " << Filename << std::endl;
+  const Options o(diffusion_threshold, bridge_threshold);
   ofstream saveFile;
   saveFile.open(Filename);
 
@@ -9807,13 +10002,13 @@ void WrightFisher::BridgeDiffusionDensityCalculator(
     }
 
     if (y >= ycount) {
-      cout << "Calculated density up to y = " << ycount << endl;
+      std::cout << "Calculated density up to y = " << ycount << endl;
       ycount += 0.1;
     }
     counter++;
   }
 
-  cout << "Density calculation complete." << endl;
+  std::cout << "Density calculation complete." << endl;
 
   saveFile.close();
 }
