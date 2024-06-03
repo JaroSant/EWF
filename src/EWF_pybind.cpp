@@ -10,8 +10,8 @@
 
 namespace py = pybind11;
 
-double dt_default = 0.1;
-double bt_default = 0.04;
+double dt_default = 0.08;
+double bt_default = 0.025;
 
 PYBIND11_MODULE(EWF_pybind, m) {
   py::class_<WrightFisher>(m, "WrightFisher")

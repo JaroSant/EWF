@@ -8981,6 +8981,35 @@ vector<int> WrightFisher::mklModeFinder(
   return returnvec;
 }
 
+double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
+  double100 answer;
+  // If arguments are large, just use Stirling approximation for gamma function:
+  // Gamma(x+1) = sqrt(2*pi*x)*(x/e)^x
+  if (min(a, b) > 100.0) {
+    answer = 0.5 * (log(a - 1.0) - log(b - 1.0)) + (a - 1.0) * log(a - 1.0) -
+             (b - 1.0) * log(b - 1.0) + (b - a);
+  } else if (a != b) {  // Otherwise compute sum of corresponding logs
+    // Could use boost::math::tgamma_ratio here, but below implementation is
+    // faster
+    answer = 0.0;
+    double100 high_val = max(a, b), low_val = min(a, b);
+    double100 start_val = (low_val);
+    int counter = 0;
+    while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
+      answer += log(start_val);
+      start_val += 1.0;
+      counter++;
+    }
+    if (high_val == b) {
+      answer = -answer;
+    }
+  } else {
+    answer = 0.0;
+  }
+  // NB: Returns log of gamma ratio!
+  return answer;
+}
+
 pair<double100, int> WrightFisher::DrawBridgepoint(
     double100 x, double100 z, double100 t1, double100 t2, double100 s,
     const Options &o,
@@ -9001,20 +9030,64 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
            ((theta - 1.0) / (exp(0.5 * theta * (t2 - s)))) >
        260.0))  /// Use diffusion approximations
   {
-    /// Last condition checks that corresponding m and k terms are not too
-    /// large
-    /// to create computational bottleneck
-    double100 y1 =
-        DrawEndpoint(x, t1, s, o, gen)
-            .first;  /// Diffusion approximation for when times are too small
-    /// and bridge takes too long to compute
+    // Draw M, K from corresponding ancestral process
+    m = DrawAncestralProcessG1984(s - t1, gen);
+    k = DrawAncestralProcessG1984(t2 - s, gen);
 
-    y = abs((y1 - x) + ((t2 - s) / (t2 - t1)) * x +
-            ((s - t1) / (t2 - t1)) * z);  /// Ensures y remains positive
+    // Setup theta vector appropriately
+    if (thetaP.empty()) {
+      ThetaResetter();
+    }
+    double100 theta1 = thetaP.front(), theta2 = thetaP.back();
 
-    if (y > 1.0)  /// Ensure y remains <= 1.0
-    {
-      y = 1.0 - abs(1.0 - y);
+    boost::math::binomial_distribution<double100> BIN_m(m, x);
+
+    // Compute probabilities for L, J using custom funciton for gamma ratios,
+    // and utilising log-sum-exp trick to normalise probabilities
+    vector<vector<double100>> probs;
+    vector<double100> factors_l_i;
+    for (int l_i = 0; l_i <= m; l_i++) {
+      vector<double100> log_probs_l_i(k + 1);
+      double100 bin_pmf = pdf(BIN_m, l_i);
+      double100 maxProb =
+          static_cast<double100>(-std::numeric_limits<double>::max());
+      for (int j_i = 0; j_i <= k; j_i++) {
+        boost::math::beta_distribution<double100> BETA_z(theta1 + j_i,
+                                                         theta2 + k - j_i);
+        double100 add_on =
+            log(bin_pmf) + log(pdf(BETA_z, z)) -
+            log(boost::math::factorial<double100>(
+                static_cast<double100>(j_i))) +
+            CustomGammaRatio(static_cast<double100>(k + 1),
+                             static_cast<double100>(k + 1 - j_i)) +
+            CustomGammaRatio(theta1 + static_cast<double100>(l_i + j_i),
+                             theta1 + static_cast<double100>(l_i)) +
+            CustomGammaRatio(theta2 + static_cast<double100>(m - l_i + k - j_i),
+                             theta2 + static_cast<double100>(m - l_i)) +
+            CustomGammaRatio(theta1 + theta2 + static_cast<double100>(m),
+                             theta1 + theta2 + static_cast<double100>(m + k));
+        maxProb = max(maxProb, add_on);
+        log_probs_l_i[j_i] = add_on;
+      }
+      double100 factor_li = LogSumExp(log_probs_l_i, maxProb);
+      factors_l_i.push_back(factor_li);
+      probs.push_back(log_probs_l_i);
+    }
+
+    boost::random::discrete_distribution<> DISC_l(factors_l_i);
+    l = DISC_l(gen);
+    boost::random::discrete_distribution<> DISC_j(probs[l]);
+    j = DISC_j(gen);
+
+    para1 = static_cast<double100>(theta1 + l + j),
+    para2 = static_cast<double100>(theta2 + m - l + k - j);
+
+    boost::random::gamma_distribution<> GAMMA1(para1, 1.0), GAMMA2(para2, 1.0);
+
+    y = -1.0;
+    while (!(0.0 < y && y < 1.0)) {
+      double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
+      y = G1 / (G1 + G2);
     }
   } else  /// Else use bridge simulator
   {
