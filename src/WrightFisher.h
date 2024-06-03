@@ -120,6 +120,7 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
                           double100 t, const Options &o);
   double100 LogSumExp(vector<double100> &vecProb, double100 maxProb);
   double100 CustomGammaRatio(double100 a, double100 b);
+  double100 CustomBetaPDF(double100 a, double100 b, double100 z);
 
   /// DIFFUSION SIMULATION - NEUTRAL PATHS
 

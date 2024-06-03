@@ -8993,7 +8993,7 @@ double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
     // faster
     answer = 0.0;
     double100 high_val = max(a, b), low_val = min(a, b);
-    double100 start_val = (low_val);
+    double100 start_val = low_val;
     int counter = 0;
     while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
       answer += log(start_val);
@@ -9008,6 +9008,18 @@ double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
   }
   // NB: Returns log of gamma ratio!
   return answer;
+}
+
+double100 WrightFisher::CustomBetaPDF(double100 a, double100 b, double100 z) {
+  // Returns log of pdf for a beta random variable
+  // Circumvents issues when evaluating pdf for large parameters present in
+  // boost::math::binomial_distribution
+  double100 pdf = ((a - 1.0) * log(z)) + ((b - 1.0) * log(1.0 - z));
+  double100 max_val = max(a, b), min_val = min(a, b);
+  pdf += CustomGammaRatio(a + b, max_val);
+  pdf += CustomGammaRatio(1.0, min_val);
+
+  return pdf;
 }
 
 pair<double100, int> WrightFisher::DrawBridgepoint(
@@ -9052,12 +9064,9 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
       double100 maxProb =
           static_cast<double100>(-std::numeric_limits<double>::max());
       for (int j_i = 0; j_i <= k; j_i++) {
-        boost::math::beta_distribution<double100> BETA_z(theta1 + j_i,
-                                                         theta2 + k - j_i);
         double100 add_on =
-            log(bin_pmf) + log(pdf(BETA_z, z)) -
-            log(boost::math::factorial<double100>(
-                static_cast<double100>(j_i))) +
+            log(bin_pmf) + CustomBetaPDF(theta1 + j_i, theta2 + k - j_i, z) +
+            CustomGammaRatio(1.0, static_cast<double100>(j_i + 1)) +
             CustomGammaRatio(static_cast<double100>(k + 1),
                              static_cast<double100>(k + 1 - j_i)) +
             CustomGammaRatio(theta1 + static_cast<double100>(l_i + j_i),
