@@ -2525,6 +2525,47 @@ double100 WrightFisher::LogSumExp(
   return exp(maxProb + log(sumexp));
 }
 
+double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
+  double100 answer;
+  // If arguments are large, just use Stirling approximation for gamma function:
+  // Gamma(x+1) = sqrt(2*pi*x)*(x/e)^x
+  if (min(a, b) > 100.0) {
+    answer = 0.5 * (log(a - 1.0) - log(b - 1.0)) + (a - 1.0) * log(a - 1.0) -
+             (b - 1.0) * log(b - 1.0) + (b - a);
+  } else if (a != b) {  // Otherwise compute sum of corresponding logs
+    // Could use boost::math::tgamma_ratio here, but below implementation is
+    // faster
+    answer = 0.0;
+    double100 high_val = max(a, b), low_val = min(a, b);
+    double100 start_val = low_val;
+    int counter = 0;
+    while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
+      answer += log(start_val);
+      start_val += 1.0;
+      counter++;
+    }
+    if (high_val == b) {
+      answer = -answer;
+    }
+  } else {
+    answer = 0.0;
+  }
+  // NB: Returns log of gamma ratio!
+  return answer;
+}
+
+double100 WrightFisher::CustomBetaPDF(double100 a, double100 b, double100 z) {
+  // Returns log of pdf for a beta random variable
+  // Circumvents issues when evaluating pdf for large parameters present in
+  // boost::math::binomial_distribution
+  double100 pdf = ((a - 1.0) * log(z)) + ((b - 1.0) * log(1.0 - z));
+  double100 max_val = max(a, b), min_val = min(a, b);
+  pdf += CustomGammaRatio(a + b, max_val);
+  pdf += CustomGammaRatio(1.0, min_val);
+
+  return pdf;
+}
+
 /// DIFFUSION SIMULATION - NEUTRAL PATHS
 
 pair<int, int> WrightFisher::DrawAncestralProcess(
@@ -8444,6 +8485,181 @@ End:
   return returnvec;
 }
 
+vector<int> WrightFisher::DrawBridgePMFSmall(double100 x, double100 z,
+                                             double100 s, double100 t,
+                                             const Options &o,
+                                             boost::random::mt19937 &gen) {
+  vector<int> return_vec;
+  // Draw M, K from corresponding ancestral process
+  int m = DrawAncestralProcessG1984(s, gen);
+  int k = DrawAncestralProcessG1984(t - s, gen);
+
+  // Setup theta vector appropriately
+  if (thetaP.empty()) {
+    ThetaResetter();
+  }
+  double100 theta1 = thetaP.front(), theta2 = thetaP.back();
+
+  boost::math::binomial_distribution<double100> BIN_m(m, x);
+  vector<int> ljMode = ljModeFinder(m, k, x, z, o);
+
+  double100 add_on =
+      ljModeFinder_Evaluator(m, k, ljMode.front(), ljMode.back(), x, z, o);
+
+  // Compute probabilities for L, J using custom funciton for gamma ratios,
+  // and utilising log-sum-exp trick to normalise probabilities
+  int l = ljMode.front(), j = ljMode.back();
+  vector<vector<double100>> probs;
+  vector<double100> factors_l_i, lStore;
+  int lFlip = 1, lU = 0, lD = 0, newlMode = min(ljMode.front(), m);
+  l = newlMode;  /// Redefine lMode in case m is too small!
+  bool lSwitch = false, lDownSwitch = false, lUpSwitch = false;
+  double100 lContr_D = 0.0, lContr_U = lContr_D, lContr;
+  while (!lSwitch) {
+    assert((l >= 0) && (l <= m));
+    if (l != newlMode) {
+      if (lU > lD) {
+        lContr_U += log(static_cast<double100>(m - (l - 1))) -
+                    log(static_cast<double100>((l - 1) + 1)) + log(x) -
+                    log(1.0 - x) +
+                    log(static_cast<double100>(theta1 + m - (l - 1) - 1)) -
+                    log(static_cast<double100>(theta2 + (l - 1)));
+        lContr = lContr_U;
+      } else {
+        lContr_D += log(static_cast<double100>(l + 1)) -
+                    log(static_cast<double100>(m - (l + 1) + 1)) +
+                    log(1.0 - x) - log(x) +
+                    log(static_cast<double100>(theta1 + (l + 1) - 1)) -
+                    log(static_cast<double100>(theta2 + m - (l + 1)));
+        lContr = lContr_D;
+      }
+    } else {
+      lContr = lContr_U;
+    }
+    double100 maxProb =
+        static_cast<double100>(-std::numeric_limits<double>::max());
+    vector<double100> log_probs_l_i(k + 1, maxProb);
+    int jFlip = 1, jU = 0, jD = 0, newjMode = min(ljMode.back(), k);
+    j = newjMode;  /// Redefine jMode in case k is too small!
+    bool jSwitch = false, jDownSwitch = false,
+         jUpSwitch = false;  /// Compute j contributions
+    double100 threshold =
+        ljModeFinder_Evaluator(m, k, l, j, x, z, o) - 4.0 * log(10.0);
+    double100 jContr_D = 0.0, jContr_U = jContr_D, jContr;
+
+    while (!jSwitch) {
+      if (j != newjMode) {
+        if (jU > jD) {
+          jContr_U +=
+              log(static_cast<double100>(k - (j - 1))) -
+              log(static_cast<double100>((j - 1) + 1)) + log(z) - log(1.0 - z) +
+              log(static_cast<double100>(theta1 + l + (j - 1))) -
+              log(static_cast<double100>(theta1 + (j - 1))) +
+              log(static_cast<double100>(theta2 + k - (j - 1) - 1)) -
+              log(static_cast<double100>(theta2 + m - l + k - (j - 1) - 1));
+          jContr = jContr_U;
+        } else {
+          jContr_D +=
+              log(static_cast<double100>(j + 1)) -
+              log(static_cast<double100>(k - (j + 1) + 1)) + log(1.0 - z) -
+              log(z) + log(static_cast<double100>(theta1 + (j + 1) - 1)) -
+              log(static_cast<double100>(theta1 + l + (j + 1) - 1)) +
+              log(static_cast<double100>(theta2 + m - l + k - (j + 1))) -
+              log(static_cast<double100>(theta2 + k - (j + 1)));
+          jContr = jContr_D;
+        }
+      } else {
+        jContr = jContr_U;
+      }
+      double100 new_entry = add_on + lContr + jContr;
+      log_probs_l_i[j] = new_entry;
+      maxProb =
+          max(new_entry,
+              maxProb);  /// Running max needed for log-sum-exp trick later
+
+      if (!(jDownSwitch))  /// Switching mechanism for j
+      {
+        if (sgn(j - newjMode) <= 0) {
+          jDownSwitch = ((new_entry < threshold) || (newjMode - jD - 1) < 0);
+        }
+      }
+
+      if (!(jUpSwitch)) {
+        if (sgn(j - newjMode) >= 0) {
+          jUpSwitch = ((new_entry < threshold) || (newjMode + jU + 1) > k);
+        }
+      }
+
+      jSwitch = (jDownSwitch && jUpSwitch);
+
+      if (!jSwitch) {
+        if ((jFlip == 1 && (newjMode + jU + 1 <= k)) ||
+            (jDownSwitch && !(jUpSwitch))) {
+          jU++;
+          j = newjMode + jU;
+          jFlip *= (jDownSwitch ? 1 : -1);
+        } else if ((jFlip == -1 && (newjMode - jD - 1 >= 0)) ||
+                   (jUpSwitch && !(jDownSwitch))) {
+          jD++;
+          j = newjMode - jD;
+          jFlip *= (jUpSwitch ? 1 : -1);
+        }
+      }
+    }
+
+    double100 factor_li = LogSumExp(log_probs_l_i, maxProb);
+    factors_l_i.push_back(factor_li);
+    probs.push_back(log_probs_l_i);
+    lStore.push_back(l);
+
+    if (!(lDownSwitch))  /// Switching mechanism for l
+    {
+      if (sgn(l - newlMode) <= 0) {
+        lDownSwitch = (((jU == 0) && (jD == 0)) || (newlMode - lD - 1) < 0);
+      }
+    }
+
+    if (!(lUpSwitch)) {
+      if (sgn(l - newlMode) >= 0) {
+        lUpSwitch = (((jU == 0) && (jD == 0)) || (newlMode + lU + 1) > m);
+      }
+    }
+
+    lSwitch = (lDownSwitch && lUpSwitch) || (!(x > 0.0));
+
+    if (!lSwitch) {
+      if ((lFlip == 1 && (newlMode + lU + 1 <= m)) ||
+          (lDownSwitch && !(lUpSwitch))) {
+        lU++;
+        l = newlMode + lU;
+        lFlip *= (lDownSwitch ? 1 : -1);
+      } else if ((lFlip == -1 && (newlMode - lD - 1 >= 0)) ||
+                 (lUpSwitch && !(lDownSwitch))) {
+        lD++;
+        l = newlMode - lD;
+        lFlip *= (lUpSwitch ? 1 : -1);
+      }
+    }
+  }
+
+  if (!(x > 0.0)) {
+    boost::random::discrete_distribution<> DISC_l(factors_l_i);
+    l = lStore[DISC_l(gen)];
+  } else {
+    l = 0;
+  }
+
+  boost::random::discrete_distribution<> DISC_j(probs[l]);
+  j = DISC_j(gen);
+
+  return_vec.push_back(m);
+  return_vec.push_back(k);
+  return_vec.push_back(l);
+  return_vec.push_back(j);
+
+  return return_vec;
+}
+
 double100 WrightFisher::mkModeFinder_Evaluator(
     int m, int k, double100 x, double100 z, double100 s, double100 t,
     const Options &o)  /// Evaluation function for finding mode over (m,k)
@@ -8561,6 +8777,28 @@ double100 WrightFisher::mklModeFinder_Evaluator(
                     boost::math::lgamma(static_cast<double100>(theta + m - l))
               : boost::math::lgamma(static_cast<double100>(theta + l + k)) -
                     boost::math::lgamma(static_cast<double100>(theta + l)));
+}
+
+double100 WrightFisher::ljModeFinder_Evaluator(
+    int m, int k, int l, int j, double100 x, double100 z,
+    const Options
+        &o)  /// Evaluation function for finding mode over (l,j) given (m, k)
+{
+  assert((m >= 0) && (k >= 0) && (j >= 0) && (j <= k) && (l >= 0) && (l <= m) &&
+         (x >= 0.0) && (x <= 1.0) && (z >= 0.0) && (z <= 1.0));
+  boost::math::binomial_distribution<> BIN(m, x);
+  return log(pdf(BIN, l)) +
+         CustomBetaPDF(thetaP.front() + j, thetaP.back() + k - j, z) +
+         CustomGammaRatio(1.0, static_cast<double100>(j + 1)) +
+         CustomGammaRatio(static_cast<double100>(k + 1),
+                          static_cast<double100>(k + 1 - j)) +
+         CustomGammaRatio(thetaP.front() + static_cast<double100>(l + j),
+                          thetaP.front() + static_cast<double100>(l)) +
+         CustomGammaRatio(thetaP.back() + static_cast<double100>(m - l + k - j),
+                          thetaP.back() + static_cast<double100>(m - l)) +
+         CustomGammaRatio(
+             thetaP.front() + thetaP.back() + static_cast<double100>(m),
+             thetaP.front() + thetaP.back() + static_cast<double100>(m + k));
 }
 
 vector<int> WrightFisher::mkModeFinder(
@@ -8847,7 +9085,7 @@ vector<int> WrightFisher::mkljModeFinder(
 
     /// Iterate until (m,k,l,j) told not to change any more
     if (!(m_ud > 0) && !(m_ud < 0) && !(k_ud > 0) && !(k_ud < 0) &&
-        !(j_ud > 0) && !(j_ud < 0)) {
+        !(j_ud > 0) && !(j_ud < 0) && !(l_ud > 0) && !(l_ud < 0)) {
       stop = true;
       returnvec.push_back(m);
       returnvec.push_back(k);
@@ -8981,45 +9219,67 @@ vector<int> WrightFisher::mklModeFinder(
   return returnvec;
 }
 
-double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
-  double100 answer;
-  // If arguments are large, just use Stirling approximation for gamma function:
-  // Gamma(x+1) = sqrt(2*pi*x)*(x/e)^x
-  if (min(a, b) > 100.0) {
-    answer = 0.5 * (log(a - 1.0) - log(b - 1.0)) + (a - 1.0) * log(a - 1.0) -
-             (b - 1.0) * log(b - 1.0) + (b - a);
-  } else if (a != b) {  // Otherwise compute sum of corresponding logs
-    // Could use boost::math::tgamma_ratio here, but below implementation is
-    // faster
-    answer = 0.0;
-    double100 high_val = max(a, b), low_val = min(a, b);
-    double100 start_val = low_val;
-    int counter = 0;
-    while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
-      answer += log(start_val);
-      start_val += 1.0;
-      counter++;
+vector<int> WrightFisher::ljModeFinder(
+    int m, int k, double100 x, double100 z,
+    const Options &o)  /// Routine for finding mode over (l,j) given (m,k)
+{
+  vector<int> returnvec;
+  int l = static_cast<int>(floor(static_cast<double100>(m) * x)),
+      j = static_cast<int>(floor(static_cast<double100>(k) * z));
+
+  int l_ud, j_ud;  /// Initialise at modes from Bin(m,x), Bin(k,z)
+  double100 currMode_eval = ljModeFinder_Evaluator(m, k, l, j, x, z, o);
+
+  bool stop = false;
+
+  /// Iteratively increment l and j depending on whether function
+  /// increases or decreases with proposed move
+  while (!stop) {
+    if (m == 0) {
+      l_ud = 0;
+    } else {
+      if ((l + 1 <= m) &&
+          (currMode_eval < ljModeFinder_Evaluator(m, k, l + 1, j, x, z, o))) {
+        l_ud = 1;
+      } else if ((l - 1 >= 0) &&
+                 (currMode_eval <
+                  ljModeFinder_Evaluator(m, k, l - 1, j, x, z, o))) {
+        l_ud = -1;
+      } else {
+        l_ud = 0;
+      }
     }
-    if (high_val == b) {
-      answer = -answer;
+
+    l += l_ud;
+    currMode_eval = ljModeFinder_Evaluator(m, k, l, j, x, z, o);
+
+    if (k == 0) {
+      j_ud = 0;
+    } else {
+      if ((j + 1 <= k) &&
+          (currMode_eval < ljModeFinder_Evaluator(m, k, l, j + 1, x, z, o))) {
+        j_ud = 1;
+      } else if ((j - 1 >= 0) &&
+                 (currMode_eval <
+                  ljModeFinder_Evaluator(m, k, l, j - 1, x, z, o))) {
+        j_ud = -1;
+      } else {
+        j_ud = 0;
+      }
     }
-  } else {
-    answer = 0.0;
+
+    j += j_ud;
+    currMode_eval = ljModeFinder_Evaluator(m, k, l, j, x, z, o);
+
+    /// Iterate until (l,j) told not to change any more
+    if (!(j_ud > 0) && !(l_ud < 0)) {
+      stop = true;
+      returnvec.push_back(l);
+      returnvec.push_back(j);
+    }
   }
-  // NB: Returns log of gamma ratio!
-  return answer;
-}
 
-double100 WrightFisher::CustomBetaPDF(double100 a, double100 b, double100 z) {
-  // Returns log of pdf for a beta random variable
-  // Circumvents issues when evaluating pdf for large parameters present in
-  // boost::math::binomial_distribution
-  double100 pdf = ((a - 1.0) * log(z)) + ((b - 1.0) * log(1.0 - z));
-  double100 max_val = max(a, b), min_val = min(a, b);
-  pdf += CustomGammaRatio(a + b, max_val);
-  pdf += CustomGammaRatio(1.0, min_val);
-
-  return pdf;
+  return returnvec;
 }
 
 pair<double100, int> WrightFisher::DrawBridgepoint(
@@ -9042,62 +9302,11 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
            ((theta - 1.0) / (exp(0.5 * theta * (t2 - s)))) >
        260.0))  /// Use diffusion approximations
   {
-    // Draw M, K from corresponding ancestral process
-    m = DrawAncestralProcessG1984(s - t1, gen);
-    k = DrawAncestralProcessG1984(t2 - s, gen);
-
-    // Setup theta vector appropriately
-    if (thetaP.empty()) {
-      ThetaResetter();
-    }
-    double100 theta1 = thetaP.front(), theta2 = thetaP.back();
-
-    boost::math::binomial_distribution<double100> BIN_m(m, x);
-
-    // Compute probabilities for L, J using custom funciton for gamma ratios,
-    // and utilising log-sum-exp trick to normalise probabilities
-    vector<vector<double100>> probs;
-    vector<double100> factors_l_i;
-    for (int l_i = 0; l_i <= m; l_i++) {
-      vector<double100> log_probs_l_i(k + 1);
-      double100 bin_pmf = pdf(BIN_m, l_i);
-      double100 maxProb =
-          static_cast<double100>(-std::numeric_limits<double>::max());
-      for (int j_i = 0; j_i <= k; j_i++) {
-        double100 add_on =
-            log(bin_pmf) + CustomBetaPDF(theta1 + j_i, theta2 + k - j_i, z) +
-            CustomGammaRatio(1.0, static_cast<double100>(j_i + 1)) +
-            CustomGammaRatio(static_cast<double100>(k + 1),
-                             static_cast<double100>(k + 1 - j_i)) +
-            CustomGammaRatio(theta1 + static_cast<double100>(l_i + j_i),
-                             theta1 + static_cast<double100>(l_i)) +
-            CustomGammaRatio(theta2 + static_cast<double100>(m - l_i + k - j_i),
-                             theta2 + static_cast<double100>(m - l_i)) +
-            CustomGammaRatio(theta1 + theta2 + static_cast<double100>(m),
-                             theta1 + theta2 + static_cast<double100>(m + k));
-        maxProb = max(maxProb, add_on);
-        log_probs_l_i[j_i] = add_on;
-      }
-      double100 factor_li = LogSumExp(log_probs_l_i, maxProb);
-      factors_l_i.push_back(factor_li);
-      probs.push_back(log_probs_l_i);
-    }
-
-    boost::random::discrete_distribution<> DISC_l(factors_l_i);
-    l = DISC_l(gen);
-    boost::random::discrete_distribution<> DISC_j(probs[l]);
-    j = DISC_j(gen);
-
-    para1 = static_cast<double100>(theta1 + l + j),
-    para2 = static_cast<double100>(theta2 + m - l + k - j);
-
-    boost::random::gamma_distribution<> GAMMA1(para1, 1.0), GAMMA2(para2, 1.0);
-
-    y = -1.0;
-    while (!(0.0 < y && y < 1.0)) {
-      double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
-      y = G1 / (G1 + G2);
-    }
+    vector<int> mklj = DrawBridgePMFSmall(x, z, s - t1, t2 - t1, o, gen);
+    m = mklj[0];
+    k = mklj[1];
+    l = mklj[2];
+    j = mklj[3];
   } else  /// Else use bridge simulator
   {
     if (!(x > 0.0))  /// x = 0
@@ -9328,17 +9537,17 @@ pair<double100, int> WrightFisher::DrawBridgepoint(
         j = mklj[3];
       }
     }
+  }
 
-    para1 = static_cast<double100>(thetaP[0] + l + j),
-    para2 = static_cast<double100>(thetaP[1] + m - l + k - j);
+  para1 = static_cast<double100>(thetaP[0] + l + j),
+  para2 = static_cast<double100>(thetaP[1] + m - l + k - j);
 
-    boost::random::gamma_distribution<> GAMMA1(para1, 1.0), GAMMA2(para2, 1.0);
+  boost::random::gamma_distribution<> GAMMA1(para1, 1.0), GAMMA2(para2, 1.0);
 
-    y = -1.0;
-    while (!(0.0 < y && y < 1.0)) {
-      double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
-      y = G1 / (G1 + G2);
-    }
+  y = -1.0;
+  while (!(0.0 < y && y < 1.0)) {
+    double100 G1 = GAMMA1(gen), G2 = GAMMA2(gen);
+    y = G1 / (G1 + G2);
   }
 
   return make_pair(y, coeffcount);

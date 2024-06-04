@@ -202,6 +202,9 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
   vector<int> DrawBridgePMFG1984(double100 x, double100 z, double100 s,
                                  double100 t, const Options &o,
                                  boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFSmall(double100 x, double100 z, double100 s,
+                                 double100 t, const Options &o,
+                                 boost::random::mt19937 &gen);
   double100 mkModeFinder_Evaluator(int m, int k, double100 x, double100 z,
                                    double100 s, double100 t, const Options &o);
   double100 mkjModeFinder_Evaluator(int m, int k, int j, double100 x,
@@ -213,6 +216,8 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
   double100 mklModeFinder_Evaluator(int m, int k, int l, double100 x,
                                     double100 z, double100 s, double100 t,
                                     const Options &o);
+  double100 ljModeFinder_Evaluator(int m, int k, int l, int j, double100 x,
+                                   double100 z, const Options &o);
   vector<int> mkModeFinder(double100 x, double100 z, double100 s, double100 t,
                            const Options &o);
   vector<int> mkjModeFinder(double100 x, double100 z, double100 s, double100 t,
@@ -221,6 +226,8 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
                              const Options &o);
   vector<int> mklModeFinder(double100 x, double100 z, double100 s, double100 t,
                             const Options &o);
+  vector<int> ljModeFinder(int m, int k, double100 x, double100 z,
+                           const Options &o);
   pair<double100, int> DrawBridgepoint(double100 x, double100 z, double100 t1,
                                        double100 t2, double100 s,
                                        const Options &o,
