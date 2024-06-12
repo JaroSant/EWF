@@ -2525,27 +2525,83 @@ double100 WrightFisher::LogSumExp(
   return exp(maxProb + log(sumexp));
 }
 
+bool WrightFisher::differByInteger(double100 a, double100 b,
+                                   double100 tolerance = 1e-9) {
+  double diff = std::abs(a - b);
+  double intPart;
+
+  return std::abs(std::modf(diff, &intPart)) < tolerance;
+}
+
 double100 WrightFisher::CustomGammaRatio(double100 a, double100 b) {
   double100 answer;
   // If arguments are large, just use Stirling approximation for gamma function:
   // Gamma(x+1) = sqrt(2*pi*x)*(x/e)^x
-  if (min(a, b) > 100.0) {
+  if (std::min(a, b) > 100.0) {
     answer = 0.5 * (log(a - 1.0) - log(b - 1.0)) + (a - 1.0) * log(a - 1.0) -
              (b - 1.0) * log(b - 1.0) + (b - a);
   } else if (a != b) {  // Otherwise compute sum of corresponding logs
     // Could use boost::math::tgamma_ratio here, but below implementation is
     // faster
-    answer = 0.0;
-    double100 high_val = max(a, b), low_val = min(a, b);
-    double100 start_val = low_val;
-    int counter = 0;
-    while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
-      answer += log(start_val);
-      start_val += 1.0;
-      counter++;
-    }
-    if (high_val == b) {
-      answer = -answer;
+    if (differByInteger(a, b)) {  // If a and b differ by an integer, cancelling
+                                  // out simplifies life
+      answer = 0.0;
+      double100 high_val = std::max(a, b), low_val = std::min(a, b);
+      double100 start_val = low_val;
+      int counter = 0;
+      while (counter < static_cast<int>(floor(high_val) - floor(low_val))) {
+        answer += log(start_val);
+        start_val += 1.0;
+        counter++;
+      }
+      double100 remainder = high_val - start_val;
+      if (remainder > 0.0) {
+        answer += log(high_val - start_val);
+      }
+      if (high_val == b) {
+        answer = -answer;
+      }
+    } else {  // Otherwise we need to compute the numerator and denominator
+              // separately
+      double100 num = 0.0, den = 0.0;
+      double100 start_num = a - floor(a), start_den = b - floor(b);
+      bool ready = false, num_ready = false, den_ready = false;
+      while (!ready) {
+        if (!num_ready) {
+          if ((num == 0.0)) {
+            if (!(start_num > 0.0)) {
+              start_num = 1.0;
+              num += log(start_num);
+            } else {
+              num += log(std::tgamma(1.0 + start_num));
+            }
+          } else {
+            num += log(start_num);
+          }
+          start_num += 1.0;
+          if (start_num > a - 1.0) {
+            num_ready = true;
+          }
+        }
+        if (!den_ready) {
+          if (den == 0.0) {
+            if (!(start_den > 0.0)) {
+              start_den = 1.0;
+              den += log(start_den);
+            } else {
+              den += log(std::tgamma(1.0 + start_den));
+            }
+          } else {
+            den += log(start_den);
+          }
+          start_den += 1.0;
+          if (start_den > b - 1.0) {
+            den_ready = true;
+          }
+        }
+        ready = num_ready * den_ready;
+      }
+      answer = num - den;
     }
   } else {
     answer = 0.0;
@@ -8510,26 +8566,33 @@ vector<int> WrightFisher::DrawBridgePMFSmall(double100 x, double100 z,
   // and utilising log-sum-exp trick to normalise probabilities
   int l = ljMode.front(), j = ljMode.back();
   vector<vector<double100>> probs;
-  vector<double100> factors_l_i, lStore;
+  vector<double100> factors_l_i;
+  vector<int> lStore;
   int lFlip = 1, lU = 0, lD = 0, newlMode = min(ljMode.front(), m);
   l = newlMode;  /// Redefine lMode in case m is too small!
   bool lSwitch = false, lDownSwitch = false, lUpSwitch = false;
   double100 lContr_D = 0.0, lContr_U = lContr_D, lContr;
   while (!lSwitch) {
     assert((l >= 0) && (l <= m));
+    int newjMode = min(ljMode.back(), k);
+    j = newjMode;
     if (l != newlMode) {
       if (lU > lD) {
-        lContr_U += log(static_cast<double100>(m - (l - 1))) -
-                    log(static_cast<double100>((l - 1) + 1)) + log(x) -
-                    log(1.0 - x) +
-                    log(static_cast<double100>(theta1 + m - (l - 1) - 1)) -
-                    log(static_cast<double100>(theta2 + (l - 1)));
+        lContr_U +=
+            log(static_cast<double100>(m - (l - 1))) -
+            log(static_cast<double100>((l - 1) + 1)) + log(x) - log(1.0 - x) +
+            log(static_cast<double100>(theta1 + (l - 1) + j)) -
+            log(static_cast<double100>(theta1 + (l - 1))) +
+            log(static_cast<double100>(theta2 + m - (l - 1) - 1)) -
+            log(static_cast<double100>(theta2 + m - (l - 1) + k - j - 1));
         lContr = lContr_U;
       } else {
         lContr_D += log(static_cast<double100>(l + 1)) -
                     log(static_cast<double100>(m - (l + 1) + 1)) +
                     log(1.0 - x) - log(x) +
                     log(static_cast<double100>(theta1 + (l + 1) - 1)) -
+                    log(static_cast<double100>(theta1 + (l + 1) + j - 1)) +
+                    log(static_cast<double100>(theta2 + m - (l + 1) + k - j)) -
                     log(static_cast<double100>(theta2 + m - (l + 1)));
         lContr = lContr_D;
       }
@@ -8539,8 +8602,7 @@ vector<int> WrightFisher::DrawBridgePMFSmall(double100 x, double100 z,
     double100 maxProb =
         static_cast<double100>(-std::numeric_limits<double>::max());
     vector<double100> log_probs_l_i(k + 1, maxProb);
-    int jFlip = 1, jU = 0, jD = 0, newjMode = min(ljMode.back(), k);
-    j = newjMode;  /// Redefine jMode in case k is too small!
+    int jFlip = 1, jU = 0, jD = 0;  /// Redefine jMode in case k is too small!
     bool jSwitch = false, jDownSwitch = false,
          jUpSwitch = false;  /// Compute j contributions
     double100 threshold =
@@ -8642,14 +8704,17 @@ vector<int> WrightFisher::DrawBridgePMFSmall(double100 x, double100 z,
     }
   }
 
-  if (!(x > 0.0)) {
+  int l_index;
+  if (x > 0.0) {
     boost::random::discrete_distribution<> DISC_l(factors_l_i);
-    l = lStore[DISC_l(gen)];
+    l_index = DISC_l(gen);
+    l = lStore[l_index];
   } else {
+    l_index = 0;
     l = 0;
   }
 
-  boost::random::discrete_distribution<> DISC_j(probs[l]);
+  boost::random::discrete_distribution<> DISC_j(probs[l_index]);
   j = DISC_j(gen);
 
   return_vec.push_back(m);

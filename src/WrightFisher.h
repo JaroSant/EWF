@@ -119,6 +119,7 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
   double100 BridgeDensity(double100 x, double100 z, double100 y, double100 s,
                           double100 t, const Options &o);
   double100 LogSumExp(vector<double100> &vecProb, double100 maxProb);
+  bool differByInteger(double100 a, double100 b, double100 tolerance);
   double100 CustomGammaRatio(double100 a, double100 b);
   double100 CustomBetaPDF(double100 a, double100 b, double100 z);
 

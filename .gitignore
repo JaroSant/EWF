@@ -1,1 +1,6 @@
 examples/test.py
+/build
+/EWF.egg-info
+/.vscode
+/examples/*.png
+/examples/*.txt
