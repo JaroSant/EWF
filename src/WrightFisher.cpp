@@ -8705,17 +8705,29 @@ vector<int> WrightFisher::DrawBridgePMFSmall(double100 x, double100 z,
   }
 
   int l_index;
-  if (x > 0.0) {
+  // Split into cases x = 0.0 (so l = 0), x = 1.0 (so l = m), and x in (0,1)
+  if (x > 0.0 && x < 1.0) {
     boost::random::discrete_distribution<> DISC_l(factors_l_i);
     l_index = DISC_l(gen);
     l = lStore[l_index];
-  } else {
-    l_index = 0;
+  } else if (!(x > 0.0)) {
     l = 0;
+    // Find index of lStore[index] = l (should be 0, but just in case)
+    l_index = int(find(lStore.begin(), lStore.end(), l) - lStore.begin());
+  } else {  // Otherwise x = 1.0
+    l = m;
+    l_index = int(find(lStore.begin(), lStore.end(), l) - lStore.begin());
   }
 
-  boost::random::discrete_distribution<> DISC_j(probs[l_index]);
-  j = DISC_j(gen);
+  // Same if z = 0.0, 1.0, or in (0,1)
+  if (z > 0.0 && z < 1.0) {
+    boost::random::discrete_distribution<> DISC_j(probs[l_index]);
+    j = DISC_j(gen);
+  } else if (!(z > 0.0)) {
+    j = 0;
+  } else {
+    j = k;
+  }
 
   return_vec.push_back(m);
   return_vec.push_back(k);
