@@ -10076,7 +10076,8 @@ void WrightFisher::DiffusionRunner(
   saveFile.open(Filename);
 
   boost::random::mt19937 gen;
-  int nosamples = 1, loader = floor(0.1 * nSim), loader_count = 1;
+  int nosamples = 1, loader = max(static_cast<int>(floor(0.1 * nSim)), 1),
+      loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
       saveFile
@@ -10156,7 +10157,8 @@ void WrightFisher::BridgeDiffusionRunner(
   saveFile.open(Filename);
 
   boost::random::mt19937 gen;
-  int nosamples = 1, loader = floor(0.1 * nSim), loader_count = 1;
+  int nosamples = 1, loader = max(static_cast<int>(floor(0.1 * nSim)), 1),
+      loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
       saveFile << NonNeutralDrawBridgepoint(x, startT, endT, z, sampleT,
