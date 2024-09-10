@@ -285,6 +285,7 @@ ooO--(_)--Ooo-ooO--(_)--Ooo
   Polynomial SelectionFunction, PhiFunction, AtildeFunction;
   int thetaIndex;
   vector<vector<double100>> akm;
+  boost::random::mt19937 WF_gen;
 
   /// HELPER FUNCTIONS
 

@@ -10075,20 +10075,20 @@ void WrightFisher::DiffusionRunner(
   ofstream saveFile;
   saveFile.open(Filename);
 
-  boost::random::mt19937 gen;
   int nosamples = 1, loader = max(static_cast<int>(floor(0.1 * nSim)), 1),
       loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
-      saveFile
-          << NonNeutralDrawEndpoint(x, startT, endT, Absorption, o, gen).first
-          << "\n";
+      saveFile << NonNeutralDrawEndpoint(x, startT, endT, Absorption, o, WF_gen)
+                      .first
+               << "\n";
     } else {
       if (Absorption) {
-        saveFile << DrawUnconditionedDiffusion(x, endT - startT, o, gen).first
-                 << "\n";
+        saveFile
+            << DrawUnconditionedDiffusion(x, endT - startT, o, WF_gen).first
+            << "\n";
       } else {
-        saveFile << DrawEndpoint(x, startT, endT, o, gen).first << "\n";
+        saveFile << DrawEndpoint(x, startT, endT, o, WF_gen).first << "\n";
       }
     }
 
@@ -10156,24 +10156,25 @@ void WrightFisher::BridgeDiffusionRunner(
   ofstream saveFile;
   saveFile.open(Filename);
 
-  boost::random::mt19937 gen;
   int nosamples = 1, loader = max(static_cast<int>(floor(0.1 * nSim)), 1),
       loader_count = 1;
   while (nosamples < nSim + 1) {
     if (non_neutral) {
       saveFile << NonNeutralDrawBridgepoint(x, startT, endT, z, sampleT,
-                                            Absorption, o, gen)
+                                            Absorption, o, WF_gen)
                       .first
                << "\n";
     } else {
       if (Absorption) {
-        saveFile << DrawUnconditionedBridge(x, z, startT, endT, sampleT, o, gen)
+        saveFile << DrawUnconditionedBridge(x, z, startT, endT, sampleT, o,
+                                            WF_gen)
                         .first
                  << "\n";
       } else {
         ThetaResetter();
-        saveFile << DrawBridgepoint(x, z, startT, endT, sampleT, o, gen).first
-                 << "\n";
+        saveFile
+            << DrawBridgepoint(x, z, startT, endT, sampleT, o, WF_gen).first
+            << "\n";
       }
     }
 
