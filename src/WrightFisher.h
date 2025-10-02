@@ -7,334 +7,421 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <utility>
 
 using namespace boost::multiprecision;
 
 #include "Polynomial.h"
 #include "myHelpers.h"
 
-/// typedef boost::multiprecision::cpp_dec_float_100 double100; /// Can switch
-/// to this for increased precision, but makes computations much slower!!
-typedef double double100;
-
 class WrightFisher {
  public:
-  WrightFisher(vector<double> thetaP_in, bool non_neut_in, double100 sigma_in,
-               int selectionsetup_in, double dom_in, int SelPolyDeg_in,
-               vector<double> selCoefs_in)
-      : thetaP(thetaP_in),
-        non_neutral(non_neut_in),
-        sigma(sigma_in),
-        SelectionSetup(selectionsetup_in),
-        dominanceParameter(dom_in),
-        SelPolyDeg(SelPolyDeg_in),
-        selectionCoeffs(selCoefs_in) {
-    ThetaSetter();
-    SelectionSetter();
-    PhiSetter();
-    std::cout << R"(
-                           
-     +++           )|(     
-    (o o)         (o o)    
-ooO--(_)--Ooo-ooO--(_)--Ooo
-    _______       ________
-   / ____/ |     / / ____/
-  / __/  | | /| / / /_    
- / /___  | |/ |/ / __/    
-/_____/  |__/|__/_/       
-                          
-)" << '\n';
-    std::cout << "You've instantiated a WrightFisher class with the following "
-                 "parameters:"
-              << std::endl;
-    if (!thetaP.empty()) {
-      std::cout << "Theta vector: (" << thetaP.front() << ", " << thetaP.back()
-                << ")" << std::endl;
-    } else {
-      std::cout << "Theta vector: (0.0, 0.0)" << std::endl;
-    }
-    if (non_neutral) {
-      if (SelectionSetup == 0) {
-        std::cout << "Genic selection: " << sigma << std::endl;
-      } else if (SelectionSetup == 1) {
-        std::cout << "Diploid selection with:" << std::endl;
-        std::cout << "Sigma: " << sigma << std::endl;
-        std::cout << "Dominance parameter: " << dominanceParameter << std::endl;
-      } else {
-        std::cout << "Polynomial selection with degree " << SelPolyDeg
-                  << " with entries:" << std::endl;
-        for (vector<double>::iterator sc_it = selectionCoeffs.begin();
-             sc_it != selectionCoeffs.end(); sc_it++) {
-          std::cout << *sc_it << ", ";
-        }
-        std::cout << "." << std::endl;
-      }
-    } else {
-      std::cout << "No selection." << std::endl;
+  WrightFisher(vector<double> changepoints, vector<vector<double>> thetaP_in,
+               bool non_neut_in, vector<double> sigma_in, int selectionsetup_in,
+               vector<double> dom_in, int SelPolyDeg_in,
+               vector<vector<double>> selCoefs_in)
+      : changepts(std::move(changepoints)),
+        thetaP(std::move(thetaP_in)),
+        non_neutral(std::move(non_neut_in)),
+        sigma(std::move(sigma_in)),
+        SelectionSetup(std::move(selectionsetup_in)),
+        dominanceParameter(std::move(dom_in)),
+        SelPolyDeg(std::move(SelPolyDeg_in)),
+        selectionCoeffs(std::move(selCoefs_in)) {
+    size_t N = thetaP.size();
+    theta.assign(N, 0.0);
+    SelectionFunction.assign(N, Polynomial());
+    PhiFunction.assign(N, Polynomial());
+    AtildeFunction.assign(N, Polynomial());
+
+    for (size_t N_i = 0; N_i < N; ++N_i) {
+      ThetaSetter(N_i);
+      SelectionSetter(N_i);
+      // PhiSetter(N_i);
     }
   }
 
-  double100 phiMin, phiMax, AtildeMax;
+  vector<double> phiMin, phiMax, AtildeMax, AtildeMin;
 
   /// HELPER FUNCTIONS
-  void ThetaSetter();
-  void ThetaResetter();
-  void SelectionSetter();
-  void PhiSetter();
-  vector<double100> get_Theta();
-  double100 Phitilde(double100 y);
-  vector<double100> PhitildeMinMaxRange();
-  double100 Atilde(double100 x);
-  double100 Atildeplus();
-  pair<double, double> GriffithsParas(double100 t);
-  double100 computeLogBeta(int m, int k);
-  double100 NormCDF(double100 x, double100 m, double100 v);
-  double100 DiscretisedNormCDF(int m, double100 t);
-  double100 LogBinomialCoefficientCalculator(int n, int k);
-  double100 UnconditionedDiffusionDensity(double100 x, double100 y, double100 t,
-                                          const Options &o);
-  double100 DiffusionDensityApproximationDenom(double100 x, double100 t,
-                                               const Options &o);
-  double100 DiffusionDensityApproximation(double100 x, double100 y, double100 t,
-                                          const Options &o);
-  double100 QmApprox(int m, double100 t, const Options &o);
-  double100 UnconditionedBridgeDensity(double100 x, double100 z, double100 y,
-                                       double100 s, double100 t,
+  void ThetaSetter(size_t N_i);
+  void ThetaResetter(size_t N_i);
+  void SelectionSetter(size_t N_i);
+  void PhiSetter(size_t N_i);
+  vector<vector<double>> get_Theta();
+  double Phitilde(size_t N_i, double y);
+  vector<double> PhitildeMinMaxRange(size_t N_i);
+  double Atilde(size_t N_i, double x);
+  double Atildeplus(size_t N_i);
+  double Atildeminus(size_t N_i);
+  size_t first_greater_index(double s);
+  size_t first_ge_index(double s);
+  size_t getIndex(double s);
+  pair<double, double> GriffithsParas(size_t N_i, double t);
+  double computeLogBeta(int m, int k);
+  double NormCDF(double x, double m, double v);
+  double DiscretisedNormCDF(size_t N_i, int m, double t);
+  double LogBinomialCoefficientCalculator(int n, int k);
+  double UnconditionedDiffusionDensity(size_t N_i, double x, double y, double t,
                                        const Options &o);
-  double100 BridgeDenominatorApprox(double100 x, double100 z, double100 t,
-                                    const Options &o);
-  double100 DiffusionBridgeDensityApproximation(double100 x, double100 z,
-                                                double100 y, double100 t,
-                                                double100 s, const Options &o);
-  double100 BridgeDenom(double100 x, double100 z, double100 y, double100 s,
-                        double100 t, const Options &o);
-  double100 ComputeDensity1(double100 x, double100 z, double100 y, double100 s,
-                            double100 t, const Options &o);
-  double100 ComputeDensity2(double100 x, double100 z, double100 y, double100 s,
-                            double100 t, const Options &o);
-  double100 ComputeDensity3(double100 x, double100 z, double100 y, double100 s,
-                            double100 t, const Options &o);
-  double100 ComputeDensity4(double100 x, double100 z, double100 y, double100 s,
-                            double100 t, const Options &o);
-  double100 BridgeDensity(double100 x, double100 z, double100 y, double100 s,
-                          double100 t, const Options &o);
-  double100 LogSumExp(vector<double100> &vecProb, double100 maxProb);
-  bool differByInteger(double100 a, double100 b, double100 tolerance);
-  double100 CustomGammaRatio(double100 a, double100 b);
-  double100 CustomBetaPDF(double100 a, double100 b, double100 z);
+  double DiffusionDensityApproximationDenom(size_t N_i, double x, double t,
+                                            const Options &o);
+  double DiffusionDensityApproximation(size_t N_i, double x, double y, double t,
+                                       const Options &o);
+  double QmApprox(size_t N_i, int m, double t, const Options &o);
+  double UnconditionedBridgeDensity(size_t N_i, double x, double z, double y,
+                                    double s, double t, const Options &o);
+  double BridgeDenom(size_t N_i, double x, double z, double y, double s,
+                     double t, const Options &o);
+  double ComputeDensity1(size_t N_i, double x, double z, double y, double s,
+                         double t, const Options &o);
+  double ComputeDensity2(size_t N_i, double x, double z, double y, double s,
+                         double t, const Options &o);
+  double ComputeDensity3(size_t N_i, double x, double z, double y, double s,
+                         double t, const Options &o);
+  double ComputeDensity4(size_t N_i, double x, double z, double y, double s,
+                         double t, const Options &o);
+  double ComputeDensityDiffTheta(size_t N_i, double x, double z, double y,
+                                 double s, double t, const Options &o);
+  double ComputeDensityDiffThetaBoundaries(size_t N_i, double x, double z,
+                                           double y, double s, double t,
+                                           const Options &o);
+  double ComputeDensityDiffThetaInterior(size_t N_i, double x, double z,
+                                         double y, double s, double t,
+                                         const Options &o);
+  double BridgeDensity(size_t N_i, double x, double z, double y, double s,
+                       double t, const Options &o);
+  double BridgeDiffThetaDensity(size_t N_i, double x, double z, double y,
+                                double s, double t, const Options &o);
+  double LogSumExp(vector<double> &vecProb, double maxProb);
 
   /// DIFFUSION SIMULATION - NEUTRAL PATHS
 
-  pair<int, int> DrawAncestralProcess(double100 t, const Options &o,
+  pair<int, int> DrawAncestralProcess(size_t N_i, double t, const Options &o,
                                       boost::random::mt19937 &gen);
   pair<int, int> DrawAncestralProcessConditionalZero(
-      double100 t, const Options &o, boost::random::mt19937 &gen);
+      size_t N_i, double t, const Options &o, boost::random::mt19937 &gen);
   pair<pair<int, int>, int> DrawAncestralProcessConditionalInterior(
-      double100 t, double100 x, const Options &o, boost::random::mt19937 &gen);
-  int DrawAncestralProcessG1984(double100 t, boost::random::mt19937 &gen);
-  int DrawSizebiasedAncestralProcess(int d, double100 t,
+      size_t N_i, double t, double x, const Options &o,
+      boost::random::mt19937 &gen);
+  int DrawAncestralProcessG1984(size_t N_i, double t,
+                                boost::random::mt19937 &gen);
+  int DrawSizebiasedAncestralProcess(size_t N_i, int d, double t,
                                      boost::random::mt19937 &gen);
-  pair<double100, int> DrawEndpoint(double100 x, double100 t1, double100 t2,
-                                    const Options &o,
-                                    boost::random::mt19937 &gen);
-  pair<double100, int> DrawUnconditionedDiffusion(double100 x, double100 t,
-                                                  const Options &o,
-                                                  boost::random::mt19937 &gen);
+  pair<double, int> DrawEndpoint(size_t N_i, double x, double t1, double t2,
+                                 const Options &o, boost::random::mt19937 &gen);
+  pair<double, int> DrawUnconditionedDiffusion(size_t N_i, double x, double t,
+                                               const Options &o,
+                                               boost::random::mt19937 &gen);
 
   /// DIFFUSION SIMULATION - NON-NEUTRAL PATHS
 
-  vector<vector<double100>> NonNeutralDraw(double100 x, double100 t1,
-                                           double100 t2, bool Absorption,
+  vector<vector<double>> NonNeutralDraw(size_t N_i, double x, double t1,
+                                        double t2, bool Absorption,
+                                        const Options &o,
+                                        boost::random::mt19937 &gen);
+  pair<double, int> NonNeutralDrawEndpoint(size_t N_i, double x, double t1,
+                                           double t2, bool Absorption,
                                            const Options &o,
                                            boost::random::mt19937 &gen);
-  pair<double100, int> NonNeutralDrawEndpoint(double100 x, double100 t1,
-                                              double100 t2, bool Absorption,
-                                              const Options &o,
-                                              boost::random::mt19937 &gen);
 
   /// BRIDGE SIMULATION - NEUTRAL PATHS
 
-  vector<int> DrawBridgePMFUnconditional(double100 x, double100 z, double100 s,
-                                         double100 t, const Options &o,
+  vector<int> DrawBridgePMFUnconditional(size_t N_i, double x, double z,
+                                         double s, double t, const Options &o,
                                          boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFUnconditionalOneQApprox(double100 x, double100 z,
-                                                   double100 s, double100 t,
+  vector<int> DrawBridgePMFUnconditionalOneQApprox(size_t N_i, double x,
+                                                   double z, double s, double t,
                                                    const Options &o,
                                                    boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFUnconditionalApprox(double100 x, double100 z,
-                                               double100 s, double100 t,
+  vector<int> DrawBridgePMFUnconditionalApprox(size_t N_i, double x, double z,
+                                               double s, double t,
                                                const Options &o,
                                                boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFSameMutation(double100 x, double100 s, double100 t,
-                                        const Options &o,
+  vector<int> DrawBridgePMFSameMutation(size_t N_i, double x, double s,
+                                        double t, const Options &o,
                                         boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFSameMutationOneQApprox(double100 x, double100 s,
-                                                  double100 t, const Options &o,
+  vector<int> DrawBridgePMFSameMutationOneQApprox(size_t N_i, double x,
+                                                  double s, double t,
+                                                  const Options &o,
                                                   boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFSameMutationApprox(double100 x, double100 s,
-                                              double100 t,
+  vector<int> DrawBridgePMFSameMutationApprox(size_t N_i, double x, double s,
+                                              double t,
                                               boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFDifferentMutation(double100 s, double100 t,
-                                             double100 x, const Options &o,
+  vector<int> DrawBridgePMFDifferentMutation(size_t N_i, double s, double t,
+                                             double x, const Options &o,
                                              boost::random::mt19937 &gen);
   vector<int> DrawBridgePMFDifferentMutationOneQApprox(
-      double100 s, double100 t, double100 x, const Options &o,
+      size_t N_i, double s, double t, double x, const Options &o,
       boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFDifferentMutationApprox(double100 s, double100 t,
-                                                   double100 x,
+  vector<int> DrawBridgePMFDifferentMutationApprox(size_t N_i, double s,
+                                                   double t, double x,
                                                    const Options &o,
                                                    boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFInteriorMutation(double100 x, double100 z,
-                                            double100 s, double100 t,
+  vector<int> DrawBridgePMFInteriorMutation(size_t N_i, double x, double z,
+                                            double s, double t,
                                             const Options &o,
                                             boost::random::mt19937 &gen);
   vector<int> DrawBridgePMFInteriorMutationOneQApprox(
-      double100 x, double100 z, double100 s, double100 t, const Options &o,
+      size_t N_i, double x, double z, double s, double t, const Options &o,
       boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFInteriorMutationApprox(double100 x, double100 z,
-                                                  double100 s, double100 t,
+  vector<int> DrawBridgePMFInteriorMutationApprox(size_t N_i, double x,
+                                                  double z, double s, double t,
                                                   const Options &o,
                                                   boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMF(double100 x, double100 z, double100 s, double100 t,
+  vector<int> DrawBridgePMF(size_t N_i, double x, double z, double s, double t,
                             const Options &o, boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFOneQApprox(double100 x, double100 z, double100 s,
-                                      double100 t, const Options &o,
+  vector<int> DrawBridgePMFOneQApprox(size_t N_i, double x, double z, double s,
+                                      double t, const Options &o,
                                       boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFG1984(double100 x, double100 z, double100 s,
-                                 double100 t, const Options &o,
+  vector<int> DrawBridgePMFG1984(size_t N_i, double x, double z, double s,
+                                 double t, const Options &o,
                                  boost::random::mt19937 &gen);
-  vector<int> DrawBridgePMFSmall(double100 x, double100 z, double100 s,
-                                 double100 t, const Options &o,
-                                 boost::random::mt19937 &gen);
-  double100 mkModeFinder_Evaluator(int m, int k, double100 x, double100 z,
-                                   double100 s, double100 t, const Options &o);
-  double100 mkjModeFinder_Evaluator(int m, int k, int j, double100 x,
-                                    double100 z, double100 s, double100 t,
-                                    const Options &o);
-  double100 mkljModeFinder_Evaluator(int m, int k, int l, int j, double100 x,
-                                     double100 z, double100 s, double100 t,
-                                     const Options &o);
-  double100 mklModeFinder_Evaluator(int m, int k, int l, double100 x,
-                                    double100 z, double100 s, double100 t,
-                                    const Options &o);
-  double100 ljModeFinder_Evaluator(int m, int k, int l, int j, double100 x,
-                                   double100 z, const Options &o);
-  vector<int> mkModeFinder(double100 x, double100 z, double100 s, double100 t,
-                           const Options &o);
-  vector<int> mkjModeFinder(double100 x, double100 z, double100 s, double100 t,
-                            const Options &o);
-  vector<int> mkljModeFinder(double100 x, double100 z, double100 s, double100 t,
-                             const Options &o);
-  vector<int> mklModeFinder(double100 x, double100 z, double100 s, double100 t,
-                            const Options &o);
-  vector<int> ljModeFinder(int m, int k, double100 x, double100 z,
-                           const Options &o);
-  pair<double100, int> DrawBridgepoint(double100 x, double100 z, double100 t1,
-                                       double100 t2, double100 s,
-                                       const Options &o,
-                                       boost::random::mt19937 &gen);
-  pair<double100, int> DrawUnconditionedBridge(double100 x, double100 z,
-                                               double100 t1, double100 t2,
-                                               double100 s, const Options &o,
+  vector<int> DrawBridgePMFDiffTheta(size_t N_i, double x, double z, double s,
+                                     double t, const Options &o,
+                                     boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaOneQApprox(size_t N_i, double x, double z,
+                                               double s, double t,
+                                               const Options &o,
                                                boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaApprox(size_t N_i, double x, double z,
+                                           double s, double t, const Options &o,
+                                           boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaBoundaries(size_t N_i, double x, double z,
+                                               double s, double t,
+                                               const Options &o,
+                                               boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaBoundariesOneQApprox(
+      size_t N_i, double x, double z, double s, double t, const Options &o,
+      boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaBoundariesApprox(
+      size_t N_i, double x, double z, double s, double t, const Options &o,
+      boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaInterior(size_t N_i, double x, double z,
+                                             double s, double t,
+                                             const Options &o,
+                                             boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaInteriorOneQApprox(
+      size_t N_i, double x, double z, double s, double t, const Options &o,
+      boost::random::mt19937 &gen);
+  vector<int> DrawBridgePMFDiffThetaInteriorApprox(size_t N_i, double x,
+                                                   double z, double s, double t,
+                                                   const Options &o,
+                                                   boost::random::mt19937 &gen);
+  double mkModeFinder_Evaluator(bool isDiffTheta, size_t N_i, int m, int k,
+                                double x, double z, double s, double t,
+                                const Options &o);
+  double mkjModeFinder_Evaluator(bool isDiffTheta, size_t N_i, int m, int k,
+                                 int j, double x, double z, double s, double t,
+                                 const Options &o);
+  double mkjDensityModeFinder_Evaluator(bool isDiffTheta, size_t N_i, int m,
+                                        int k, int j, double x, double z,
+                                        double y, double s, double t,
+                                        const Options &o);
+  double mkljModeFinder_Evaluator(bool isDiffTheta, size_t N_i, int m, int k,
+                                  int l, int j, double x, double z, double s,
+                                  double t, const Options &o);
+  double mklModeFinder_Evaluator(bool isDiffTheta, size_t N_i, int m, int k,
+                                 int l, double x, double z, double s, double t,
+                                 const Options &o);
+  vector<int> mkModeFinder(bool isDiffTheta, size_t N_i, double x, double z,
+                           double s, double t, const Options &o);
+  vector<int> mkjModeFinder(bool isDiffTheta, size_t N_i, double x, double z,
+                            double s, double t, const Options &o);
+  vector<int> mkjDensityModeFinder(bool isDiffTheta, size_t N_i, double x,
+                                   double z, double y, double s, double t,
+                                   const Options &o);
+  vector<int> mkljModeFinder(bool isDiffTheta, size_t N_i, double x, double z,
+                             double s, double t, const Options &o);
+  vector<int> mklModeFinder(bool isDiffTheta, size_t N_i, double x, double z,
+                            double s, double t, const Options &o);
+  pair<double, int> DrawBridgepoint(size_t N_i, double x, double z, double t1,
+                                    double t2, double s, const Options &o,
+                                    boost::random::mt19937 &gen);
+  pair<double, int> DrawBridgepointDiffTheta(size_t N_i, double x, double z,
+                                             double t1, double t2, double s,
+                                             const Options &o,
+                                             boost::random::mt19937 &gen);
+  pair<double, int> DrawUnconditionedBridge(size_t N_i, double x, double z,
+                                            double t1, double t2, double s,
+                                            const Options &o,
+                                            boost::random::mt19937 &gen);
 
   /// BRIDGE SIMULATION - NON-NEUTRAL PATHS
 
-  vector<vector<double100>> NonNeutralDrawBridge(double100 x, double100 t1,
-                                                 double100 t2, double100 z,
-                                                 bool Absorption,
-                                                 const Options &o,
-                                                 boost::random::mt19937 &gen);
-  pair<double100, int> NonNeutralDrawBridgepoint(
-      double100 x, double100 t1, double100 t2, double100 z, double100 testT,
-      bool Absorption, const Options &o, boost::random::mt19937 &gen);
+  vector<vector<double>> NonNeutralDrawBridge(size_t N_i, double x, double t1,
+                                              double t2, double z,
+                                              bool Absorption, const Options &o,
+                                              boost::random::mt19937 &gen);
+  pair<double, vector<vector<double>>> NonNeutralDrawBridgeDiffTheta(
+      size_t N_i, double x, double t1, double t2, double z, double s,
+      const Options &o, boost::random::mt19937 &gen);
+  pair<double, int> NonNeutralDrawBridgepoint(size_t N_i, double x, double t1,
+                                              double t2, double z, double testT,
+                                              bool Absorption, const Options &o,
+                                              boost::random::mt19937 &gen);
+  pair<double, int> NonNeutralDrawBridgepointDiffTheta(
+      size_t N_i, double x, double t1, double t2, double z, double testT,
+      const Options &o, boost::random::mt19937 &gen);
 
   /// SIMULATION RUNNER FUNCTIONS
 
-  void DiffusionRunner(int nSim, double100 x, double100 startT, double100 endT,
+  void DiffusionRunner(int nSim, double x, double startT, double endT,
                        bool Absorption, string &Filename,
-                       double100 diffusion_threshold,
-                       double100 bridge_threshold);
-  void BridgeDiffusionRunner(int nSim, double100 x, double100 z,
-                             double100 startT, double100 endT,
-                             double100 sampleT, bool Absorption,
-                             string &Filename, double100 diffusion_threshold,
-                             double100 bridge_threshold);
-  void DiffusionDensityCalculator(int meshSize, double100 x, double100 startT,
-                                  double100 endT, bool Absorption,
-                                  string &Filename,
-                                  double100 diffusion_threshold,
-                                  double100 bridge_threshold);
-  void BridgeDiffusionDensityCalculator(int meshSize, double100 x, double100 z,
-                                        double100 startT, double100 endT,
-                                        double100 sampleT, bool Absorption,
-                                        string &Filename,
-                                        double100 diffusion_threshold,
-                                        double100 bridge_threshold);
+                       double diffusion_threshold, double bridge_threshold);
+  void DiffusionRunnerVector(int nSim, vector<double> x, double startT,
+                             double endT, bool Absorption, string &Filename,
+                             double diffusion_threshold,
+                             double bridge_threshold);
+  void DiffusionTrajectoryVector(int nSim, double x, vector<double> times,
+                                 bool Absorption, string &Filename,
+                                 double diffusion_threshold,
+                                 double bridge_threshold);
+  void BridgeDiffusionRunner(int nSim, double x, double z, double startT,
+                             double endT, double sampleT, bool Absorption,
+                             string &Filename, bool verbose,
+                             double diffusion_threshold,
+                             double bridge_threshold);
+  void DiffusionDensityCalculator(int meshSize, double x, double startT,
+                                  double endT, bool Absorption,
+                                  string &Filename, bool verbose,
+                                  double diffusion_threshold,
+                                  double bridge_threshold);
+  void BridgeDiffusionDensityCalculator(int meshSize, double x, double z,
+                                        double startT, double endT,
+                                        double sampleT, bool Absorption,
+                                        string &Filename, bool verbose,
+                                        double diffusion_threshold,
+                                        double bridge_threshold);
+  void DrawBridgeDiffTheta(string Filename, int nSim, size_t N_i, double x,
+                           double z, double startT, double endT, double sampleT,
+                           double diffusion_threshold, double bridge_threshold);
+  void BridgeDiffusionDiffThetaDensityCalculator(string Filename, size_t N_i,
+                                                 int meshSize, double x,
+                                                 double z, double startT,
+                                                 double endT, double sampleT,
+                                                 double diffusion_threshold,
+                                                 double bridge_threshold);
 
  private:
   /// WRIGHT-FISHER PROPERTIES
 
-  vector<double> thetaP;
+  vector<vector<double>> thetaP;
   bool non_neutral;
-  double theta, sigma;
+  vector<double> theta, sigma;
   int SelectionSetup;
-  double dominanceParameter;
+  vector<double> dominanceParameter;
   int SelPolyDeg;
-  vector<double> selectionCoeffs;
-  Polynomial SelectionFunction, PhiFunction, AtildeFunction;
+  vector<vector<double>> selectionCoeffs;
+  vector<Polynomial> SelectionFunction, PhiFunction, AtildeFunction;
   int thetaIndex;
-  vector<vector<double100>> akm;
+  vector<vector<vector<double>>> akm;
   boost::random::mt19937 WF_gen;
+  vector<double> factorials;
+  vector<vector<double>> lg_theta1, lg_theta2, lg_theta;
+  vector<double> changepts;
 
   /// HELPER FUNCTIONS
 
   template <typename T>
-  T Getlogakm(int k, int m);
-  int radiate_from_mode(int index, const double100 t) const;
-  void increment_on_mk(vector<int> &mk, const double100 s,
-                       const double100 t) const;
-  double100 Getd(vector<double100> &d, int i, double100 x, double100 z,
-                 double100 t);
-  double100 Getd2(vector<double100> &d, int i, double100 x, double100 t);
-  double100 GetdBridgeSame(vector<double100> &d, int i, double100 x,
-                           double100 t);
-  double100 GetdBridgeInterior(vector<double100> &d, int i, double100 x,
-                               double100 z, double100 t);
-  double100 GetdBridgeUnconditional(vector<double100> &d, int i, double100 x,
-                                    double100 z, double100 t);
-  double100 computeA(int m, int k, int l, int j, double100 x, double100 z);
-  double100 computeAUnconditional(int m, int k, int l, double100 x,
-                                  double100 z);
-  int computeC(int m, pair<vector<int>, double100> &C);
-  int computeE(pair<vector<int>, double100> &C);
+  T Getlogakm(size_t theta_index, int k, int m);
+  int radiate_from_mode(size_t N_i, int index, const double t) const;
+  void increment_on_mk(bool isDiffTheta, size_t N_i, vector<int> &mk,
+                       const double s, const double t) const;
+  vector<int> radiate2d_mode(bool isDiffTheta, size_t N_i, size_t idx, double s,
+                             double t) const;
+  double Getd(size_t N_i, vector<double> &d, int i, double x, double z,
+              double t);
+  double GetdDiffTheta(size_t N_i, vector<double> &d, int i, double x, double z,
+                       double s, double t, const Options &o);
+  double GetdDiffThetaBoundaries(size_t N_i, vector<double> &d, int i, double x,
+                                 double z, double s, double t,
+                                 const Options &o);
+  double GetdDiffThetaOneQApprox(size_t N_i, vector<double> &d, int i, double x,
+                                 double z, double s, double t,
+                                 const Options &o);
+  double Getd2(size_t N_i, vector<double> &d, int i, double x, double t);
+  double GetdBridgeSame(size_t N_i, vector<double> &d, int i, double x,
+                        double t);
+  double GetdBridgeInterior(size_t N_i, vector<double> &d, int i, double x,
+                            double z, double t);
+  double GetdBridgeUnconditional(size_t N_i, vector<double> &d, int i, double x,
+                                 double z, double t);
+  double computeA(size_t N_i, int m, int k, int l, int j, double x, double z);
+  double computeAUnconditional(size_t N_i, int m, int k, int l, double x,
+                               double z);
+  double computeADiffTheta(size_t N_i, int m, int k, int l, int j, double x,
+                           double z);
+  vector<vector<double>> computeADiffTheta_new(size_t N_i, int m, int k,
+                                               double x, double z);
+  void precomputeADiffTheta(size_t N_i, int m, int k);
+  void precomputeA(size_t N_i_s, size_t N_i_t, int m, int k);
+  double computeAGammaLambda(size_t N_i, int gamma, int lambda, double x,
+                             double z, double s, double t, const Options &o);
+  double calculate_expectation(size_t N_i, int m, int k, double x, double z);
+  double calculate_expectation_qApprox(size_t N_i, int k, double x, double z,
+                                       double s, double t, const Options &o);
+  int computeC(size_t N_i, int m, pair<vector<int>, double> &C);
+  int computeF(size_t N_i, int m, pair<vector<int>, double> &C);
+  int computeE(size_t N_i, pair<vector<int>, double> &C);
+  int computeG(size_t N_i, double x, double z, double s, double t,
+               const Options &o);
+  int computeGBoundaries(size_t N_i, double x, double z, double s, double t,
+                         const Options &o);
+  int computeGZInterior(size_t N_i, double x, double z, double s, double t,
+                        const Options &o);
+  int computeGXInterior(size_t N_i, double x, double z, double s, double t,
+                        const Options &o);
 };
 
 template <typename T>
-T WrightFisher::Getlogakm(int k, int m) {
-  assert(k >= m);
-  if (m > static_cast<int>(akm.size()) - 1) akm.resize(m + 1);
-  if ((k - m > static_cast<int>(akm[m].size()) - 1)) {
-    int oldsize = static_cast<int>(akm[m].size());
-    akm[m].resize(k - m + 1, 0);
-
-    for (int i = oldsize + m; i <= k; ++i) {
-      if (i == 0)
-        akm[m][i - m] = 0.0;
-      else {
-        T a = log(theta + 2.0 * i - 1);
-        for (int j = 2; j <= i; ++j) {
-          a += log(theta + m + j - 2.0);
-          if (j <= i - m)
-            a -= log(static_cast<T>(j));  /// We need (n-m)! in the denominator
-          if (j <= m)
-            a -= log(static_cast<T>(j));  /// We need m! in the denominator
+T WrightFisher::Getlogakm(size_t theta_index, int k, int m) {
+  double theta_s = theta[theta_index];
+  if (k < m) {
+    return static_cast<T>(0);
+  }
+  // Ensure outer dimension covers theta_index
+  if (theta_index >= static_cast<int>(akm.size())) {
+    akm.resize(theta_index + 1);
+  }
+  auto &akm_theta = akm[theta_index];
+  // Ensure second dimension covers m
+  if (static_cast<int>(akm_theta.size()) <= m) {
+    akm_theta.resize(m + 1);
+  }
+  // For each row m0 = 0..m, ensure full columns 0..k and populate
+  for (int m0 = 0; m0 <= m; ++m0) {
+    auto &row = akm_theta[m0];
+    int needed = k + 1;  // indices 0..k inclusive
+    if (static_cast<int>(row.size()) < needed) {
+      int old_size = static_cast<int>(row.size());
+      row.resize(needed);
+      // fill new entries
+      for (int idx = old_size; idx < needed; ++idx) {
+        if (idx < m0) {
+          // entries k < m -> 0
+          row[idx] = static_cast<T>(0);
+        } else {
+          int i = idx;
+          T a;
+          if (i == 0) {
+            a = static_cast<T>(0);
+          } else {
+            a = std::log(theta_s + 2.0 * i - 1);
+            for (int j = 2; j <= i; ++j) {
+              a += std::log(theta_s + m0 + j - 2.0);
+              if (j <= i - m0) a -= std::log(static_cast<T>(j));
+              if (j <= m0) a -= std::log(static_cast<T>(j));
+            }
+          }
+          row[idx] = a;
+          // std::cout << "Setting akm[" << theta_index << "][" << m0 << "]["
+          //           << idx << "] = " << a << std::endl;
         }
-        akm[m][i - m] = a;  /// So akm[m] = (a{m,m}, a{m+1,m} a{m+2,m}, ...)
       }
     }
   }
-  return akm[m][k - m];
+  return akm_theta[m][k];
 }
 
 #endif

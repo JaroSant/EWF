@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 4.0)
 message(STATUS "Using CMake version ${CMAKE_VERSION}")
-cmake_policy(VERSION 3.16)
+cmake_policy(VERSION 4.0)
 
 project(EWF LANGUAGES CXX VERSION 1.0.1)
 
@@ -15,13 +15,12 @@ if (PYTHON_BINDINGS)
     include(FetchContent)
     FetchContent_Declare(
         pybind11
-        GIT_REPOSITORY https://github.com/pybind/pybind11
-        GIT_TAG 80dc998efced8ceb2be59756668a7e90e8bef917 # Version 2.10.1
+        GIT_REPOSITORY https://github.com/pybind/pybind11.git
+        GIT_TAG        v2.12.1       # or v2.11.1, etc.
     )
     FetchContent_GetProperties(pybind11)
     if (NOT pybind11_POPULATED)
-        FetchContent_Populate(pybind11)
-        add_subdirectory(${pybind11_SOURCE_DIR} ${pybind11_BINARY_DIR})
+        FetchContent_MakeAvailable(pybind11)
     endif()
 endif()
 
