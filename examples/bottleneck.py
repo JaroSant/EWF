@@ -140,7 +140,7 @@ if __name__ == "__main__":
     demography = np.loadtxt("bottleneck.demo")
 
     # Observations: [years BP, allele freq]
-    observations = np.loadtxt("bottleneck.txt")
+    observations = np.loadtxt("bottleneck.data")
     
     nSim = 100
     ntimes = 100

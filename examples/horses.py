@@ -102,7 +102,7 @@ sel_rate = 7e-4
 gen_gap = 5
 init_pop_size = 16e3
 eff_pop_size, times_diff_pop_size, times_years_pop_size = read_demo("horses.demo", gen_gap)
-year_times, diff_times, adj_demo, ASIP, MC1R, changepoints, mut_vecs, sel_vec = read_data("horse_data.txt", eff_pop_size, times_years_pop_size, times_diff_pop_size, mut_rate, sel_rate, gen_gap)
+year_times, diff_times, adj_demo, ASIP, MC1R, changepoints, mut_vecs, sel_vec = read_data("horse_data.data", eff_pop_size, times_years_pop_size, times_diff_pop_size, mut_rate, sel_rate, gen_gap)
 print("year_times")
 print(year_times)
 print("diff_times")
