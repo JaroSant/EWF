@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 message(STATUS "Using CMake version ${CMAKE_VERSION}")
 cmake_policy(VERSION 4.0)
 
-project(EWF LANGUAGES CXX VERSION 2.1)
+project(EWF LANGUAGES CXX VERSION 2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
