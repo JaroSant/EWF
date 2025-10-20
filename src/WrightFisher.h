@@ -18,8 +18,7 @@ class WrightFisher {
  public:
   WrightFisher(vector<double> changepoints, vector<vector<double>> thetaP_in,
                bool non_neut_in, vector<double> sigma_in, int selectionsetup_in,
-               vector<double> dom_in, int SelPolyDeg_in,
-               vector<vector<double>> selCoefs_in)
+               double dom_in, int SelPolyDeg_in, vector<double> selCoefs_in)
       : changepts(std::move(changepoints)),
         thetaP(std::move(thetaP_in)),
         non_neutral(std::move(non_neut_in)),
@@ -310,9 +309,9 @@ class WrightFisher {
   bool non_neutral;
   vector<double> theta, sigma;
   int SelectionSetup;
-  vector<double> dominanceParameter;
+  double dominanceParameter;
   int SelPolyDeg;
-  vector<vector<double>> selectionCoeffs;
+  vector<double> selectionCoeffs;
   vector<Polynomial> SelectionFunction, PhiFunction, AtildeFunction;
   int thetaIndex;
   vector<vector<vector<double>>> akm;

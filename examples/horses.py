@@ -102,7 +102,7 @@ sel_rate = 7e-4
 gen_gap = 5
 init_pop_size = 16e3
 eff_pop_size, times_diff_pop_size, times_years_pop_size = read_demo("horses.demo", gen_gap)
-year_times, diff_times, adj_demo, ASIP, MC1R, changepoints, mut_vecs, sel_vec = read_data("horse_data.data", eff_pop_size, times_years_pop_size, times_diff_pop_size, mut_rate, sel_rate, gen_gap)
+year_times, diff_times, adj_demo, ASIP, MC1R, changepoints, mut_vecs, sel_vec = read_data("horse_data.txt", eff_pop_size, times_years_pop_size, times_diff_pop_size, mut_rate, sel_rate, gen_gap)
 print("year_times")
 print(year_times)
 print("diff_times")
@@ -123,14 +123,14 @@ eff_pop_size = adj_demo[1]
 times_diff_pop_size = adj_demo[2]
 
 selectionSetup = 0
-dominance_parameter = np.array([0.0, 0.0])
+dominance_parameter = 0.0
 selectionPolynomialDegree = 1
-selectionCoefficients = np.array([[], []])
+selectionCoefficients = np.array([])
 WF = EWF.WrightFisher(changepoints, mut_vecs, True, sel_vec, selectionSetup, dominance_parameter, selectionPolynomialDegree, selectionCoefficients)
 
 nSim = 100
 ntimes = 1000
-simulate = False
+simulate = True
 if simulate:
     start_index, end_index = 0, 1
     paths = np.zeros((nSim, int((ntimes-1)*(len(diff_times)-1))))
@@ -152,7 +152,7 @@ if simulate:
         for s in tvals[1:-1]:
             if s == tvals[1]:
                 WF.BridgeDiffusionRunner(nSim, x, z, tvals[0], tvals[-1], s, False, "tmp.txt", False)
-                paths[:, s_ind] = np.loadtxt("tmp.txt")
+                paths[:, s_ind] = np.loadtxt("temp.txt")
             else:
                 x_ind = 0
                 for xv in paths[:, s_ind-1]:
@@ -184,12 +184,9 @@ for i in np.arange(np.shape(paths)[0]):
 ax.plot(year_times-20000, ASIP, 'x', color='black', markersize=8, markeredgewidth=2)
 ax.set_ylabel("Frequency", fontsize=16)
 ax.set_xlabel("Years before present", fontsize=16)
-ax2 = ax.twinx()  # share x-axis, independent y-axis
-# set your two line levels here:
+ax2 = ax.twinx()
 hline1 = 16000
 hline2 = 31423
-
-# draw horizontal lines spanning the current x-limits
 xmin, xmax = ax.get_xlim()
 ax2.hlines(hline1, -6250, 0,
            colors='tab:red',

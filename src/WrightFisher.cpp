@@ -81,30 +81,30 @@ void WrightFisher::SelectionSetter(
       break;
     }
     case 1: {  /// Diploid Selection - sigma*x*(1-x)*(h+x*(1-2*h))
-      Polynomial Eta(1.0 - 2.0 * dominanceParameter[N_i],
-                     dominanceParameter[N_i]);
+      Polynomial Eta(1.0 - 2.0 * dominanceParameter, dominanceParameter);
       SelectionFunction[N_i].Copy(0.5 * sigma[N_i] * GenicSel * Eta);
-      auto tmpPhi = 0.5 * (2.0 * 0.5 * sigma[N_i] * Alpha * Eta +
-                           0.25 * sigma[N_i] * sigma[N_i] * GenicSel * Eta * Eta +
-                           0.5 * sigma[N_i] * GenicSel * Eta.Derivative());
-      Polynomial tmpA(0.25 * sigma[N_i] * (1.0 - 2.0 * dominanceParameter[N_i]),
-                      0.5 * sigma[N_i] * dominanceParameter[N_i], 0.0);
+      auto tmpPhi =
+          0.5 * (2.0 * 0.5 * sigma[N_i] * Alpha * Eta +
+                 0.25 * sigma[N_i] * sigma[N_i] * GenicSel * Eta * Eta +
+                 0.5 * sigma[N_i] * GenicSel * Eta.Derivative());
+      Polynomial tmpA(0.25 * sigma[N_i] * (1.0 - 2.0 * dominanceParameter),
+                      0.5 * sigma[N_i] * dominanceParameter, 0.0);
       PhiFunction[N_i].Copy(tmpPhi);
       AtildeFunction[N_i].Copy(tmpA);
       break;
     }
     case 2: {  /// General polynomial selection - sigma*x*(1-x)*eta(x)
-      SelPolyDeg = static_cast<int>(selectionCoeffs[N_i].size()) - 1;
-      Polynomial Eta(&selectionCoeffs[N_i][0], SelPolyDeg);
-      auto tmpPhi = 0.5 * (2.0 * 0.5 * sigma[N_i] * Alpha * Eta +
-                           0.25 * sigma[N_i] * sigma[N_i] * GenicSel * Eta * Eta +
-                           0.5 * sigma[N_i] * GenicSel * Eta.Derivative());
+      SelPolyDeg = static_cast<int>(selectionCoeffs.size()) - 1;
+      Polynomial Eta(&selectionCoeffs[0], SelPolyDeg);
+      auto tmpPhi =
+          0.5 * (2.0 * 0.5 * sigma[N_i] * Alpha * Eta +
+                 0.25 * sigma[N_i] * sigma[N_i] * GenicSel * Eta * Eta +
+                 0.5 * sigma[N_i] * GenicSel * Eta.Derivative());
       vector<double> Acoefs(SelPolyDeg + 2);
       Acoefs[0] = 0.0;
       for (int k = 1; k <= SelPolyDeg + 1;
            ++k)  /// Scaling polynomials coefficients appropriately
-        Acoefs[k] =
-            (0.5 * sigma[N_i] * selectionCoeffs[N_i][k - 1]) / double(k);
+        Acoefs[k] = (0.5 * sigma[N_i] * selectionCoeffs[k - 1]) / double(k);
       Polynomial tmpA(&Acoefs[0], SelPolyDeg + 1);
       SelectionFunction[N_i].Copy(0.5 * sigma[N_i] * GenicSel * Eta);
       PhiFunction[N_i].Copy(tmpPhi);

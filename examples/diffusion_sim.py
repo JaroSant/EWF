@@ -10,9 +10,9 @@ mutation_vector = np.array([[1.0, 0.75]])
 non_neutral = False
 sigma = np.array([0.0])
 selectionSetup = 0
-dominance_parameter = np.array([0.0])
+dominance_parameter = 0.
 selectionPolynomialDegree = 1
-selectionCoefficients = np.array([[]])
+selectionCoefficients = np.array([])
 
 # Create and initialise WrightFisher class
 WF = EWF.WrightFisher(changepoints, mutation_vector, non_neutral, sigma, selectionSetup, dominance_parameter, selectionPolynomialDegree, selectionCoefficients)

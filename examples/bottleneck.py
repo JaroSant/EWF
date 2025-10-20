@@ -92,55 +92,17 @@ def du_to_years(t_du, T_du, N_seg, Y_yrs, gen_time=10.0):
     y = Y_yrs[i] + 2.0 * N_seg[i] * gen_time * (t - T_du[i])
     return y
 
-def build_outputs(demography_txt, observations_txt, gen_time=10.0):
-    """
-    demography_txt: path to demography file with columns: Ne   t_du(past)
-    observations_txt: path to observations with columns: yearsBP   allele_frequency
-    Returns:
-      change_times_since_first: 1D array of diffusion times (>=0) at which Ne changes,
-                                measured from the first observation time.
-      obs_du: (N,2) array: [t_du_abs, freq]   (absolute diffusion time from present)
-      obs_du_from_first: (N,2) array: [t_du - t_du_first, freq]
-    """
-    demo = np.loadtxt(demography_txt)
-    obs  = np.loadtxt(observations_txt)
-
-    # Build mapping
-    T_du, N_seg, Y_yrs = build_demography_map(demo, gen_time=gen_time)
-
-    # Convert observation times (years BP) -> diffusion units
-    yrs = obs[:, 0]
-    freq = obs[:, 1]
-    t_du_abs = years_to_du(yrs, T_du, N_seg, Y_yrs, gen_time=gen_time)
-
-    # First observation time in diffusion units
-    t0 = t_du_abs[0]
-
-    # Demography change times at/after t0
-    # Keep breakpoints >= t0
-    T_after = T_du[T_du >= t0]
-    # Express as times since first observation
-    change_times_since_first = T_after - t0
-
-    # Observations in diffusion units (absolute and shifted)
-    obs_du = np.column_stack([t_du_abs, freq])
-    obs_du_from_first = np.column_stack([t_du_abs - t0, freq])
-
-    return change_times_since_first, obs_du, obs_du_from_first
-
 if __name__ == "__main__":
     mut_rate = 2.5e-8 
     sel_rate = 3e-4
-    selcoef_rates = np.array([5.e-7, 6.625e-6, 1.75e-5, 1.25e-5])
+    selectionCoefficients = np.array([-0.09375, 0.6875, -1.5, 1])
     gen_time = 10
     selectionSetup = 2
-    dominance_parameter = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    dominance_parameter = 0.0
     selectionPolynomialDegree = 3
-    # Demography: columns [Ne, t_du(past)]
     demography = np.loadtxt("bottleneck.demo")
 
-    # Observations: [years BP, allele freq]
-    observations = np.loadtxt("bottleneck.data")
+    observations = np.loadtxt("bottleneck.txt")
     
     nSim = 100
     ntimes = 100
@@ -159,11 +121,10 @@ if __name__ == "__main__":
 
         mut_vec = np.array([np.array([2.0 * Ne * mut_rate, 2.0 * Ne * mut_rate]) for Ne in np.flip(N_seg)])
         sel_vec = 2.0 * np.flip(N_seg) * sel_rate
-        selectionCoefficients = np.array([2.0 * Ne * selcoef_rates for Ne in np.flip(N_seg)])
 
         WF = EWF.WrightFisher(changepoints, mut_vec, True, sel_vec, selectionSetup, dominance_parameter, selectionPolynomialDegree, selectionCoefficients)
         
-        simulate_bottleneck = False
+        simulate_bottleneck = True
         if simulate_bottleneck:
             start_index, end_index = 0, 1
             paths = np.zeros((nSim, int((ntimes-1)*(len(t_du_abs)-1))))
@@ -212,15 +173,10 @@ if __name__ == "__main__":
         ax.plot(-observations[:, 0], observations[:, 1], 'x', color='black', markersize=8, markeredgewidth=2)
         ax.set_ylabel("Frequency", fontsize=16)
         ax.set_xlabel("Years before present", fontsize=16)
-        ax2 = ax.twinx()  # share x-axis, independent y-axis
-        # set your two line levels here:
+        ax2 = ax.twinx() 
         hline1 = 5000
         hline2 = 40000
-
         chngpt_yr = -du_to_years(np.abs(changepoints - 1.5), T_du, N_seg, Y_yrs, gen_time) 
-
-        # draw horizontal lines spanning the current x-limits
-        xmin, xmax = ax.get_xlim()
         ax2.hlines([hline1, hline1, hline1], [chngpt_yr[0], chngpt_yr[2], chngpt_yr[4]], [chngpt_yr[1], chngpt_yr[3], chngpt_yr[5]],
                 colors='tab:red',
                 linewidths=2, alpha=0.9)
@@ -252,11 +208,10 @@ if __name__ == "__main__":
 
         mut_vec_const40k = np.array([[2.0 * 40000. * mut_rate, 2.0 * 40000. * mut_rate]])
         sel_vec_const40k = np.array([2. * 40000. * sel_rate])
-        selectionCoefficients_const40k = np.array([2. * 40000. * selcoef_rates])
         
-        WF_const40k = EWF.WrightFisher(changepoints, mut_vec_const40k, True, sel_vec_const40k, selectionSetup, dominance_parameter, selectionPolynomialDegree, selectionCoefficients_const40k)
+        WF_const40k = EWF.WrightFisher(changepoints, mut_vec_const40k, True, sel_vec_const40k, selectionSetup, dominance_parameter, selectionPolynomialDegree, selectionCoefficients)
 
-        simulate_const = False
+        simulate_const = True
         if simulate_const:
             start_index, end_index = 0, 1
             paths = np.zeros((nSim, int((ntimes-1)*(len(t_du_abs)-1))))
@@ -306,12 +261,8 @@ if __name__ == "__main__":
         ax.plot(-observations[:, 0], observations[:, 1], 'x', color='black', markersize=8, markeredgewidth=2)
         ax.set_ylabel("Frequency", fontsize=16)
         ax.set_xlabel("Years before present", fontsize=16)
-        ax2 = ax.twinx()  # share x-axis, independent y-axis
-        # set your two line levels here:
+        ax2 = ax.twinx() 
         hline1 = 40000
-
-        # draw horizontal lines spanning the current x-limits
-        xmin, xmax = ax.get_xlim()
         ax2.hlines(hline1, yr_times[0], yr_times[-1],
                 colors='tab:red',
                 linewidths=2, alpha=0.9)

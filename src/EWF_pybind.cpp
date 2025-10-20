@@ -16,8 +16,8 @@ double bt_default = 0.04;
 PYBIND11_MODULE(EWF_pybind, m) {
   py::class_<WrightFisher>(m, "WrightFisher")
       .def(py::init<std::vector<double>, std::vector<std::vector<double>>, bool,
-                    std::vector<double>, int, std::vector<double>, int,
-                    std::vector<std::vector<double>>>(),
+                    std::vector<double>, int, double, int,
+                    std::vector<double>>(),
            py::arg("changepts"), py::arg("thetaP"), py::arg("non_neut"),
            py::arg("sigma"), py::arg("selectionSetup"), py::arg("dom"),
            py::arg("SelPolyDeg"), py::arg("selCoefs"))

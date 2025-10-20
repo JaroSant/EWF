@@ -92,7 +92,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='EWF',
-    version='1.0.1',
+    version='2.1',
     author='Jaromir Sant',
     url='https://jarosant.github.io/',
     install_requires=[
